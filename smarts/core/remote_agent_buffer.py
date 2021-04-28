@@ -114,7 +114,7 @@ class RemoteAgentBuffer:
         if self._local_zoo_manager:
             self._zoo_manager_conns[0]["channel"].close()
             self._zoo_manager_conns[0]["process"].terminate()
-            self._zoo_manager_conns[0]["process"].join()
+            self._zoo_manager_conns[0]["process"].wait()
 
     def _build_remote_agent(self, zoo_manager_conns):
         # Get a random zoo manager connection.
