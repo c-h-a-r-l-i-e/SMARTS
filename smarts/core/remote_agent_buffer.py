@@ -20,7 +20,10 @@
 
 import atexit
 import logging
+import pathlib
 import random
+import subprocess
+import sys
 import time
 from concurrent import futures
 from multiprocessing import Process
@@ -185,9 +188,22 @@ class RemoteAgentBuffer:
 
 
 def spawn_local_zoo_manager(port):
-    manager = Process(target=zoo_manager.serve, args=(port,))
-    manager.start()
-    return manager
+    cmd = [
+        sys.executable,  # Path to the current Python binary.
+        str(
+            (pathlib.Path(__file__).parent.parent / "zoo" / "manager.py")
+            .absolute()
+            .resolve()
+        ),
+        "--port",
+        str(port),
+    ]
+
+    manager = subprocess.Popen(cmd)
+    if manager.poll() == None:
+        return manager
+
+    raise RuntimeError("Zoo manager subprocess is not running.")
 
 
 def get_manager_channel_stub(addr):
