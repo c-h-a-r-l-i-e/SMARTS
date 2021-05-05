@@ -31,6 +31,12 @@ missions = [
     t.Mission(t.Route(begin=("gneE22", 0, 25), end=("gneE5", 1, 100))),
 ]
 
+gen_scenario(
+    t.Scenario(ego_missions=missions),
+    output_dir=Path(__file__).parent,
+)
+
+"""
 impatient_car = t.TrafficActor(
     name="car",
     speed=t.Distribution(sigma=0.2, mean=1.0),
@@ -62,5 +68,5 @@ traffic = {
 gen_scenario(
     t.Scenario(ego_missions=missions, traffic=traffic),
     output_dir=Path(__file__).parent,
-    ovewrite=True,
 )
+"""
