@@ -115,6 +115,9 @@ class SMARTS:
             ActionSpaceType.MPC,
             ActionSpaceType.TrajectoryWithTime,
         }
+        self._pure_action_spaces = {
+            ActionSpaceType.PureContinuous,
+        }
 
         # Set up indices
         self._agent_manager = AgentManager(agent_interfaces, zoo_addrs)
@@ -597,6 +600,35 @@ class SMARTS:
 
         return provider_state
 
+    def _pure_provider_step(self, agent_actions) -> ProviderState:
+        self._perform_agent_actions(agent_actions)
+
+        provider_state = ProviderState()
+        pure_agent_ids = {
+            agent_id
+            for agent_id, interface in self._agent_manager.agent_interfaces.items()
+            if interface.action_space in self._pure_action_spaces
+        }
+
+        for vehicle_id in self._vehicle_index.agent_vehicle_ids():
+            agent_id = self._vehicle_index.actor_id_from_vehicle_id(vehicle_id)
+            if agent_id not in pure_agent_ids:
+                continue
+
+            vehicle = self._vehicle_index.vehicle_by_id(vehicle_id)
+            provider_state.vehicles.append(
+                VehicleState(
+                    vehicle_id=vehicle.id,
+                    vehicle_type="passenger",
+                    pose=vehicle.pose,
+                    dimensions=vehicle.chassis.dimensions,
+                    speed=vehicle.speed,
+                    source="PURE",
+                )
+            )
+
+        return provider_state
+
     @property
     def vehicle_index(self):
         return self._vehicle_index
@@ -654,9 +686,18 @@ class SMARTS:
             agent_id: action
             for agent_id, action in actions.items()
             if agent_controls_vehicles(agent_id)
-            and matches_provider_action_spaces(agent_id, self._dynamic_action_spaces)
+               and matches_provider_action_spaces(agent_id, self._dynamic_action_spaces)
         }
         accumulated_provider_state.merge(self._pybullet_provider_step(pybullet_actions))
+
+        # Pure Physics
+        pure_actions = {
+            agent_id: action
+            for agent_id, action in actions.items()
+            if agent_controls_vehicles(agent_id)
+               and matches_provider_action_spaces(agent_id, self._pure_action_spaces)
+        }
+        accumulated_provider_state.merge(self._pure_provider_step(pure_actions))
 
         for provider in self.providers:
             provider_state = self._step_provider(provider, actions, dt)

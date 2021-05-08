@@ -144,6 +144,7 @@ class BoxChassis(Chassis):
         bullet_client: bc.BulletClient,
     ):
         self._dimensions = dimensions
+        self._steering = 0
         self._bullet_body = BulletBoxShape(self._dimensions.as_lwh, bullet_client)
         self._bullet_constraint = BulletPositionConstraint(
             self._bullet_body, bullet_client
@@ -193,7 +194,11 @@ class BoxChassis(Chassis):
 
     @property
     def steering(self):
-        return None
+        return self._steering
+
+    @steering.setter
+    def steering(self, steering: float = None):
+        self._steering = steering
 
     @property
     def yaw_rate(self):

@@ -129,7 +129,7 @@ class AgentType(IntEnum):
     """Agent performs trajectory tracking using model predictive control."""
     TrajectoryInterpolator = 11
     """Agent performs linear trajectory interpolation."""
-
+    
 
 @dataclass(frozen=True)
 class AgentsListAlive:

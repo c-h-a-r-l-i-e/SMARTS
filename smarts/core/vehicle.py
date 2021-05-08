@@ -33,6 +33,7 @@ from .chassis import AckermannChassis, BoxChassis, Chassis
 from .colors import SceneColors
 from .coordinates import BoundingBox, Heading, Pose
 from .renderer import Renderer, RendererException
+from .controllers import ActionSpaceType
 from .sensors import (
     AccelerometerSensor,
     DrivableAreaGridMapSensor,

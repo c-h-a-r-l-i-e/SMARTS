@@ -22,7 +22,7 @@ agent:
       # img_gray: (28, 28)
 
   action:
-    type: 1  # 0 for continuous, 1 for discrete
+    type: 9  # 0 for continuous, 1 for discrete, 9 for pure continuous (no pybullet)
 
 # for agent interface
 interface:
@@ -39,8 +39,8 @@ policy:
     name: PPOTrainer
 
 run:
-  checkpoint_freq: 2
-  checkpoint_at_end: True
+  checkpoint_freq: 1
+  checkpoint_at_end: False
   max_failures: 1000
   resume: False
   export_formats: [model, checkpoint]

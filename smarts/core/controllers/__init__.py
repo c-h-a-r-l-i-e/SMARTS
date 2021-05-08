@@ -37,6 +37,9 @@ from smarts.core.controllers.trajectory_tracking_controller import (
 from smarts.core.controllers.trajectory_interpolation_controller import (
     TrajectoryInterpolationController,
 )
+from smarts.core.controllers.pure_controller import (
+    PureController,
+)
 
 METER_PER_SECOND_TO_KM_PER_HR = 3.6
 
@@ -51,6 +54,7 @@ class ActionSpaceType(Enum):
     MultiTargetPose = 6  # for boid control
     MPC = 7
     TrajectoryWithTime = 8  # for pure interpolation controller
+    PureContinuous = 9 # Use integration of the acceleration to control the car (no pybullet)
 
 
 class Controllers:
@@ -123,6 +127,10 @@ class Controllers:
         elif action_space == ActionSpaceType.TrajectoryWithTime:
             TrajectoryInterpolationController.perform_trajectory_interpolation(
                 sim, agent_id, vehicle, action, controller_state
+            )
+        elif action_space == ActionSpaceType.PureContinuous:
+            PureController.perform_action(
+                vehicle, action, dt=sim.timestep_sec
             )
         else:
             raise ValueError(
