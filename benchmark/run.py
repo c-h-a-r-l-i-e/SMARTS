@@ -42,6 +42,7 @@ def main(
     horizon=1000,
     paradigm="decentralized",
     headless=False,
+    envision_record_data_replay_path=None,
     cluster=False,
 ):
     if cluster:
@@ -52,7 +53,7 @@ def main(
             )
         )
     config = gen_config(
-        scenario=scenario, config_file=config_file, paradigm=paradigm, headless=headless
+        scenario=scenario, config_file=config_file, paradigm=paradigm, headless=headless, envision_record_data_replay_path=envision_record_data_replay_path
     )
 
     tune_config = config["run"]["config"]
@@ -114,6 +115,7 @@ def parse_args():
         type=str,
         help="Path to store RLlib log and checkpoints, default is ./log/results",
     )
+    parser.add_argument("--envision_record_data_replay_path", type=str, default=None)
     parser.add_argument("--config_file", "-f", type=str, required=True)
     parser.add_argument("--restore_path", type=str, default=None)
     parser.add_argument("--num_workers", type=int, default=1, help="RLlib num workers")
@@ -136,5 +138,6 @@ if __name__ == "__main__":
         horizon=args.horizon,
         paradigm=args.paradigm,
         headless=args.headless,
+        envision_record_data_replay_path=args.envision_record_data_replay_path,
         cluster=args.cluster,
     )

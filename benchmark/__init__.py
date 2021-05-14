@@ -44,6 +44,7 @@ def gen_config(**kwargs):
             "seed": 42,
             "scenarios": [str(scenario_path)],
             "headless": kwargs["headless"],
+            "envision_record_data_replay_path": kwargs["envision_record_data_replay_path"],
             "agent_specs": agents,
         }
     )
