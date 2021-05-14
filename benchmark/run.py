@@ -44,6 +44,7 @@ def main(
     headless=False,
     envision_record_data_replay_path=None,
     cluster=False,
+    use_sumo=False
 ):
     if cluster:
         ray.init(address="auto", redis_password="5241590000000000")
@@ -53,7 +54,7 @@ def main(
             )
         )
     config = gen_config(
-        scenario=scenario, config_file=config_file, paradigm=paradigm, headless=headless, envision_record_data_replay_path=envision_record_data_replay_path
+        scenario=scenario, config_file=config_file, paradigm=paradigm, headless=headless, envision_record_data_replay_path=envision_record_data_replay_path, use_sumo=use_sumo
     )
 
     tune_config = config["run"]["config"]
@@ -110,6 +111,9 @@ def parse_args():
         "--headless", default=False, action="store_true", help="Turn on headless mode"
     )
     parser.add_argument(
+        "--use_sumo", default=False, action="store_true", help="Use sumo"
+    )
+    parser.add_argument(
         "--log_dir",
         default="./log/results",
         type=str,
@@ -140,4 +144,5 @@ if __name__ == "__main__":
         headless=args.headless,
         envision_record_data_replay_path=args.envision_record_data_replay_path,
         cluster=args.cluster,
+        use_sumo=args.use_sumo,
     )

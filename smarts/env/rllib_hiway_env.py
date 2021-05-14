@@ -81,6 +81,7 @@ class RLlibHiWayEnv(MultiAgentEnv):
 
         self._sim_name = config.get("sim_name", None)
         self._headless = config.get("headless", False)
+        self._use_sumo = config.get("use_sumo", True)
         self._num_external_sumo_clients = config.get("num_external_sumo_clients", 0)
         self._sumo_headless = config.get("sumo_headless", True)
         self._sumo_port = config.get("sumo_port")
@@ -186,16 +187,21 @@ class RLlibHiWayEnv(MultiAgentEnv):
                 headless=self._headless,
             )
 
+        if self._use_sumo:
+            traffic_sim = SumoTrafficSimulation(
+                                headless=self._sumo_headless,
+                                time_resolution=self._timestep_sec,
+                                num_external_sumo_clients=self._num_external_sumo_clients,
+                                sumo_port=self._sumo_port,
+                                auto_start=self._sumo_auto_start,
+                                endless_traffic=self._endless_traffic,
+                            )
+        else:
+            traffic_sim = None
+
         sim = SMARTS(
             agent_interfaces=agent_interfaces,
-            traffic_sim=SumoTrafficSimulation(
-                headless=self._sumo_headless,
-                time_resolution=self._timestep_sec,
-                num_external_sumo_clients=self._num_external_sumo_clients,
-                sumo_port=self._sumo_port,
-                auto_start=self._sumo_auto_start,
-                endless_traffic=self._endless_traffic,
-            ),
+            traffic_sim=traffic_sim,
             envision=envision,
             timestep_sec=self._timestep_sec,
         )

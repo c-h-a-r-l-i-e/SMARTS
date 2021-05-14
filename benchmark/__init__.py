@@ -45,6 +45,7 @@ def gen_config(**kwargs):
             "scenarios": [str(scenario_path)],
             "headless": kwargs["headless"],
             "envision_record_data_replay_path": kwargs["envision_record_data_replay_path"],
+            "use_sumo": kwargs["use_sumo"],
             "agent_specs": agents,
         }
     )
