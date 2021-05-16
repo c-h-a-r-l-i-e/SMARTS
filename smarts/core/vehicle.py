@@ -149,6 +149,9 @@ class Vehicle:
         self._action_space = action_space
         self._speed = None
 
+        self._max_accel = 6
+        self._max_brake = 6
+
         self._meta_create_sensor_functions()
         self._sensors = {}
 
@@ -207,6 +210,14 @@ class Vehicle:
             return self._speed
         else:
             return self._chassis.speed
+
+    @property
+    def max_accel(self):
+        return self._max_accel
+
+    @property
+    def max_brake(self):
+        return self._max_brake
 
     def set_speed(self, speed):
         self._speed = speed

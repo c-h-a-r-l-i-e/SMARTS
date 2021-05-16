@@ -41,9 +41,7 @@ class PureController:
         brake = np.clip(brake, 0, 1)
         steering_angle = np.clip(steering_angle, -1, 1)
 
-        max_brake = 10
-        max_accel = 10
-        a = throttle * max_accel - brake * max_brake
+        a = throttle * vehicle.max_accel - brake * vehicle.max_brake
         delta = steering_angle * np.pi/4
 
         # These coordinates and heading are of the centre of the car, and theta is in radians,
@@ -152,21 +150,14 @@ class PureLaneFollowingController:
             heading = vehicle.pose.heading
 
         heading_diff =  heading - vehicle.pose.heading
-
         steering_angle = np.clip(heading_diff / (np.pi/4), -0.5, 0.5) # Currently restrict this to avoid over-steering
 
         accel = (target_speed - vehicle.speed) / dt
-
-        # TODO: standardize max accel/brake
-        max_brake = 10
-        max_accel = 10
-
         if accel > 0:
             brake = 0
-            throttle = accel / max_accel
-
+            throttle = accel / vehicle.max_accel
         else:
-            brake = - accel / max_brake
+            brake = - accel / vehicle.max_brake
             throttle = 0
 
         action = (throttle, brake, steering_angle)
