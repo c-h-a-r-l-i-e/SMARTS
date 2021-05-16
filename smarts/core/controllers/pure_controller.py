@@ -41,8 +41,8 @@ class PureController:
         brake = np.clip(brake, 0, 1)
         steering_angle = np.clip(steering_angle, -1, 1)
 
-        max_brake = -4
-        max_accel = -4
+        max_brake = 10
+        max_accel = 10
         a = throttle * max_accel - brake * max_brake
         delta = steering_angle * np.pi/4
 
@@ -114,7 +114,6 @@ class PureLaneFollowingController:
         target_speed=12.5,
         lane_change=0,
     ):
-
         wp_paths = sensor_state.mission_planner.waypoint_paths_at(
             sim, vehicle.pose, lookahead=16
         )
@@ -125,21 +124,52 @@ class PureLaneFollowingController:
 
         wp_path = wp_paths[np.clip(current_lane + lane_change, 0, len(wp_paths) - 1)]
 
-        # FOR NOW: SIMPLE CALCULATION, change turning angle to follow next waypoints heading.
+        if len(wp_path) > 1:
+            # Look ahead 5 positions along the waypoints and take a weighted average
+            # of their poses
+            x = y = count = 0
+            mult = 1
+            lookahead = 5
+            for i in range(lookahead + 1):
+                if i < len(wp_path):
+                    x += wp_path[i].pos[0] * mult
+                    y += wp_path[i].pos[1] * mult
+                    count += mult
+                    mult /= 1.5
 
+            x /= count
+            y /= count
 
-        lookahead = 4
-        wp_headings = [wp.heading for wp in wp_path[0 : min(lookahead, len(wp_path))]]
-        heading_diff =  np.average(wp_headings) - vehicle.pose.heading
+            veh_pos = vehicle.pose.position
 
-        steering_angle = np.clip(heading_diff / (np.pi/4), -1, 1)
+            # Aim for halfway between the next two points
+            dy = y - veh_pos[1]
+            dx = x - veh_pos[0]
 
-        # TODO: this is temporary speed control
-        throttle = brake = 0
+            heading = np.arctan(dy / dx) - np.pi/2
+
+        else:
+            heading = vehicle.pose.heading
+
+        heading_diff =  heading - vehicle.pose.heading
+
+        steering_angle = np.clip(heading_diff / (np.pi/4), -0.5, 0.5) # Currently restrict this to avoid over-steering
+
+        accel = (target_speed - vehicle.speed) / dt
+
+        # TODO: standardize max accel/brake
+        max_brake = 10
+        max_accel = 10
+
+        if accel > 0:
+            brake = 0
+            throttle = accel / max_accel
+
+        else:
+            brake = - accel / max_brake
+            throttle = 0
 
         action = (throttle, brake, steering_angle)
-
-
         PureController.perform_action(vehicle, action, dt)
 
     @staticmethod
