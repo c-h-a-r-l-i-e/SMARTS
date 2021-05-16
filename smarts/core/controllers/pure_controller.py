@@ -101,3 +101,64 @@ class PureController:
         vehicle.steering = delta
 
 
+class PureLaneFollowingController:
+    @classmethod
+    def perform_lane_following(
+        cls,
+        sim,
+        agent_id,
+        vehicle,
+        controller_state,
+        sensor_state,
+        dt,
+        target_speed=12.5,
+        lane_change=0,
+    ):
+
+        wp_paths = sensor_state.mission_planner.waypoint_paths_at(
+            sim, vehicle.pose, lookahead=16
+        )
+
+        current_lane = PureLaneFollowingController.find_current_lane(
+            wp_paths, vehicle.position
+        )
+
+        wp_path = wp_paths[np.clip(current_lane + lane_change, 0, len(wp_paths) - 1)]
+
+        # FOR NOW: SIMPLE CALCULATION, change turning angle to follow next waypoints heading.
+
+
+        lookahead = 4
+        wp_headings = [wp.heading for wp in wp_path[0 : min(lookahead, len(wp_path))]]
+        heading_diff =  np.average(wp_headings) - vehicle.pose.heading
+
+        steering_angle = np.clip(heading_diff / (np.pi/4), -1, 1)
+
+        # TODO: this is temporary speed control
+        throttle = brake = 0
+
+        action = (throttle, brake, steering_angle)
+
+
+        PureController.perform_action(vehicle, action, dt)
+
+    @staticmethod
+    def find_current_lane(wp_paths, vehicle_position):
+        relative_distant_lane = [
+            np.linalg.norm(wp_paths[idx][0].pos - vehicle_position[0:2])
+            for idx in range(len(wp_paths))
+        ]
+        return np.argmin(relative_distant_lane)
+
+
+
+
+
+
+
+
+
+
+
+
+

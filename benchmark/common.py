@@ -162,6 +162,8 @@ class ActionSpace:
                 high=np.array([1.0, 1.0, 1.0]),
                 dtype=np.float32,
             )
+        elif space_type == ActionSpaceType.PureLane:
+            return gym.spaces.Discrete(4)
         else:
             raise NotImplementedError
 
@@ -844,6 +846,8 @@ class ActionAdapter:
             return ActionAdapter.discrete_action_adapter
         if space_type == ActionSpaceType.PureContinuous:
             return ActionAdapter.continuous_action_adapter
+        if space_type == ActionSpaceType.PureLane:
+            return ActionAdapter.discrete_action_adapter
         else:
             raise NotImplementedError
 

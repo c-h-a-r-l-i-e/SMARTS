@@ -22,7 +22,7 @@ agent:
       # img_gray: (28, 28)
 
   action:
-    type: 9  # 0 for continuous, 1 for discrete, 9 for pure continuous (no pybullet)
+    type: 10  # 0 for continuous, 1 for discrete, 9 for pure continuous (no pybullet), 10 for pure lane
 
 # for agent interface
 interface:
@@ -48,7 +48,8 @@ run:
     time_total_s: 14400
   config:
     log_level: WARN
-    num_workers: 1
+    num_workers: 3
+    num_envs_per_worker: 1
     num_gpus: 0
     horizon: 1000
     clip_param: 0.2

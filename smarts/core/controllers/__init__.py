@@ -39,6 +39,7 @@ from smarts.core.controllers.trajectory_interpolation_controller import (
 )
 from smarts.core.controllers.pure_controller import (
     PureController,
+    PureLaneFollowingController,
 )
 
 METER_PER_SECOND_TO_KM_PER_HR = 3.6
@@ -55,6 +56,7 @@ class ActionSpaceType(Enum):
     MPC = 7
     TrajectoryWithTime = 8  # for pure interpolation controller
     PureContinuous = 9 # Use integration of the acceleration to control the car (no pybullet)
+    PureLane = 10 # Use integration, and discreate actions
 
 
 class Controllers:
@@ -132,6 +134,27 @@ class Controllers:
             PureController.perform_action(
                 vehicle, action, dt=sim.timestep_sec
             )
+        elif action_space == ActionSpaceType.PureLane:
+            perform_lane_following = partial(
+                PureLaneFollowingController.perform_lane_following,
+                sim=sim,
+                agent_id=agent_id,
+                vehicle=vehicle,
+                controller_state=controller_state,
+                sensor_state=sensor_state,
+                dt = sim.timestep_sec,
+            )
+
+            # 12.5 m/s (45 km/h) is used as the nominal speed for lane change.
+            # For keep_lane, the nominal speed is set to 15 m/s (54 km/h).
+            if action == "keep_lane":
+                perform_lane_following(target_speed=15, lane_change=0)
+            elif action == "slow_down":
+                perform_lane_following(target_speed=0, lane_change=0)
+            elif action == "change_lane_left":
+                perform_lane_following(target_speed=12.5, lane_change=1)
+            elif action == "change_lane_right":
+                perform_lane_following(target_speed=12.5, lane_change=-1)
         else:
             raise ValueError(
                 f"perform_action(action_space={action_space}, ...) has failed "
