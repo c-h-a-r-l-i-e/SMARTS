@@ -112,6 +112,19 @@ class PureLaneFollowingController:
         target_speed=12.5,
         lane_change=0,
     ):
+        action = PureLaneFollowingController.get_action(sim, vehicle, sensor_state, dt, target_speed, lane_change)
+        PureController.perform_action(vehicle, action, dt)
+
+
+    @staticmethod
+    def get_action(
+        sim,
+        vehicle,
+        sensor_state,
+        dt,
+        target_speed=12.5,
+        lane_change=0,
+    ):
         wp_paths = sensor_state.mission_planner.waypoint_paths_at(
             sim, vehicle.pose, lookahead=16
         )
@@ -134,13 +147,10 @@ class PureLaneFollowingController:
                     y += wp_path[i].pos[1] * mult
                     count += mult
                     mult /= 1.5
-
             x /= count
             y /= count
 
             veh_pos = vehicle.pose.position
-
-            # Aim for halfway between the next two points
             dy = y - veh_pos[1]
             dx = x - veh_pos[0]
 
@@ -161,7 +171,8 @@ class PureLaneFollowingController:
             throttle = 0
 
         action = (throttle, brake, steering_angle)
-        PureController.perform_action(vehicle, action, dt)
+        return action
+
 
     @staticmethod
     def find_current_lane(wp_paths, vehicle_position):
@@ -170,16 +181,5 @@ class PureLaneFollowingController:
             for idx in range(len(wp_paths))
         ]
         return np.argmin(relative_distant_lane)
-
-
-
-
-
-
-
-
-
-
-
 
 
