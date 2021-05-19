@@ -32,8 +32,7 @@ class CarsimCar:
     """
     An object which carsim.logic can take in order to calcualte safe actions
     """
-    # TODO: change this to accept a lane start/vector argument
-    def __init__(self, vehicle_state, lane_start, lane_heading):
+    def __init__(self, vehicle_state, ref_lane, road_network):
         """
         Export a car to be used in carsim code, translating it relative to the provided lane.
 
@@ -47,6 +46,12 @@ class CarsimCar:
             The road network we're working in
         """
         position = vehicle_state.pose.position[:2]
+        try:
+            u, v = world_to_lane_coord(ref_lane, position)
+
+        except ValueError:
+            # The vehicle does not lie on the lane
+            pass
 
 
 
@@ -99,14 +104,8 @@ class SafetyPureController:
         lane_local_offsets = {v.vehicle_id: road_network.offset_into_lane(current_lane, v.pose.position[:2]) for v in vehicles}
         vehicles.sort(key = lambda v : lane_local_offsets[v.vehicle_id])
 
+        # 5. Generate the surroundings
         ego_pos = road_network.offset_into_lane(current_lane, vehicle.pose.position[:2])
-
-        # TODO: calculate the starting point/angles for the current lane
-        start_point = 
-
-
-
-        # 5. Generate the surroundings TODO: also convert to CarsimCar
         surroundings = [[None, None] for i in range(len(surrounding_lanes))]
         for v in vehicles:
             for lane_num, surrounding_lane_set in enumerate(surrounding_lanes_sets):
@@ -119,12 +118,10 @@ class SafetyPureController:
                         if surroundings[lane_num][1] is None:
                             surroundings[lane_num][1] = v
 
-        # TODO: calculate the lane boundaries for the surrounding lanes
 
+        
 
-
-
-        if vehicle.id[6] == "3":
+        if vehicle.id[6] == "1":
             print("info from vehicle id: {}".format(vehicle.id))
             print("surroundings :")
             for surrounding in surroundings:

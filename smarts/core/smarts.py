@@ -118,6 +118,8 @@ class SMARTS:
         self._pure_action_spaces = {
             ActionSpaceType.PureContinuous,
             ActionSpaceType.PureLane,
+            ActionSpaceType.SafetyPureContinuous,
+            ActionSpaceType.SafetyPureLane,
         }
 
         # Set up indices

@@ -41,6 +41,10 @@ from smarts.core.controllers.pure_controller import (
     PureController,
     PureLaneFollowingController,
 )
+from smarts.core.controllers.safety_controller import (
+    SafetyPureController,
+    SafetyPureLaneFollowingController,
+)
 
 METER_PER_SECOND_TO_KM_PER_HR = 3.6
 
@@ -57,6 +61,8 @@ class ActionSpaceType(Enum):
     TrajectoryWithTime = 8  # for pure interpolation controller
     PureContinuous = 9 # Use integration of the acceleration to control the car (no pybullet)
     PureLane = 10 # Use integration, and discreate actions
+    SafetyPureContinuous = 11 # Like Pure Continuous, but change actions to be safer
+    SafetyPureLane = 12 # Like Pure Lane, but change actions to be safer
 
 
 class Controllers:
@@ -155,12 +161,36 @@ class Controllers:
                 perform_lane_following(target_speed=12.5, lane_change=1)
             elif action == "change_lane_right":
                 perform_lane_following(target_speed=12.5, lane_change=-1)
+        elif action_space == ActionSpaceType.SafetyPureContinuous:
+            SafetyPureController.perform_action(
+                sim, sensor_state, vehicle, action, dt=sim.timestep_sec
+            )
+        elif action_space == ActionSpaceType.SafetyPureLane:
+            perform_lane_following = partial(
+                SafetyPureLaneFollowingController.perform_lane_following,
+                sim=sim,
+                agent_id=agent_id,
+                vehicle=vehicle,
+                controller_state=controller_state,
+                sensor_state=sensor_state,
+                dt = sim.timestep_sec,
+            )
+
+            # 12.5 m/s (45 km/h) is used as the nominal speed for lane change.
+            # For keep_lane, the nominal speed is set to 15 m/s (54 km/h).
+            if action == "keep_lane":
+                perform_lane_following(target_speed=15, lane_change=0)
+            elif action == "slow_down":
+                perform_lane_following(target_speed=0, lane_change=0)
+            elif action == "change_lane_left":
+                perform_lane_following(target_speed=12.5, lane_change=1)
+            elif action == "change_lane_right":
+                perform_lane_following(target_speed=12.5, lane_change=-1)
         else:
             raise ValueError(
                 f"perform_action(action_space={action_space}, ...) has failed "
                 "inside controller"
             )
-
 
 class ControllerState:
     @staticmethod
