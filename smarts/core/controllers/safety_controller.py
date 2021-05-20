@@ -27,6 +27,9 @@ from smarts.core.controllers.pure_controller import (
     PureLaneFollowingController,
 )
 
+import carsim.logic
+
+import sympy as sym
 from sympy import S
 
 
@@ -49,6 +52,9 @@ class CarsimCar:
         a : float
             The vehicle acceleration
         """
+        self.length = vehicle_state.dimensions.length
+        self.width = vehicle_state.dimensions.width
+
         position = np.array(vehicle_state.pose.position[:2])
         position -= lane_start
 
@@ -56,14 +62,16 @@ class CarsimCar:
         rot = np.array(((c, -s), (s, c)))
         position=rot.dot(position)
 
+        self.theta = (vehicle_state.pose.heading + np.pi / 2) - lane_heading
+        # translate to rear bumper
+        position -= np.array((np.cos(self.theta), np.sin(self.theta))) * self.width/2
 
-        self.v = vehicle_state.speed
         self.x = position[0]
         self.y = position[1]
-        self.theta = (vehicle_state.pose.heading + np.pi / 2) - lane_heading
-        self.length = vehicle_state.dimensions.length
-        self.width = vehicle_state.dimensions.width
+        self.v = vehicle_state.speed
         self.a = a
+        self.brake_max = -vehicle_state.max_brake
+        self.a_max = vehicle_state.max_accel
 
     def __str__(self):
         return "Vehicle @ ({}, {}) - {}".format(self.x, self.y, self.theta)
@@ -153,42 +161,56 @@ class SafetyPureController:
         # 7. Pass through to our safety checker, finding an action which is hopefully close to the original intention,
         #    but definitely is safe.
         ego_car.a = a
-        deltas = carsim.logic.calculate_safe_deltas(ego_car, lane_bounds, surroundings, dt)
+        deltas = carsim.logic.get_safe_deltas(ego_car, lane_bounds, surroundings, dt)
 
         # Check if deltas empty
         if deltas == S.EmptySet:
+            print("no safe delta with accel = {}".format(a))
             a = - vehicle.max_brake
             ego_car.a = a
-            deltas = carsim.logic.calculate_safe_deltas(ego_car, lane_bounds, surroundings, dt)
+            deltas = carsim.logic.get_safe_deltas(ego_car, lane_bounds, surroundings, dt)
 
         if deltas == S.EmptySet:
-
+            print("no safe delta with accel = 0")
+            # There's no safe delta while max braking, so steer towards lane centre.
+            delta = start_heading - vehicle.pose.heading
             
-            # Set delta to follow lane somehow
         else:
+            if not deltas.contains(delta):
+                # Action is deemed unsafe, so find the closest possible delta
+                boundary = deltas.boundary
+                assert isinstance(boundary, sym.FiniteSet)
+                delta = min(boundary.args, key=lambda d : abs(d-delta))
+                print("picked new delta = {}".format(delta))
 
 
-        # Find closest delta
+        DEBUG = True
+        if DEBUG:
+            if vehicle.id[6] == "2":
+                print("info from vehicle id: {}".format(vehicle.id))
+                print("surroundings :")
+                for surrounding in surroundings:
+                    r = surrounding[0] if surrounding[0] is not None else None
+                    f = surrounding[1] if surrounding[1] is not None else None
+                    print("{}|{}".format(r, f))
 
-        if vehicle.id[6] == "2":
-            print("info from vehicle id: {}".format(vehicle.id))
-            print("surroundings :")
-            for surrounding in surroundings:
-                r = surrounding[0] if surrounding[0] is not None else None
-                f = surrounding[1] if surrounding[1] is not None else None
-                print("{}|{}".format(r, f))
+                print("lane_bounds = {}".format(lane_bounds))
 
-            print("lane_bounds = {}".format(lane_bounds))
-
-#            print("current_lane id : {}".format(current_lane.getID()))
-#            print("surrounding lanes : {}".format([[lane.getID() for lane in lane_list] for lane_list in surrounding_lanes_sets]))
-#            #print("vehicles : {}".format(vehicles))
-#            print("")
-#            for v in vehicles:
-#                #print("vehicle {} in lanes : {}".format(v.vehicle_id, [lane.getID() for lane in vehicle_lanes[v.vehicle_id]]))
-#                print("vehicle {} in local position : {}".format(v.vehicle_id, lane_local_offsets[v.vehicle_id]))
+    #            print("current_lane id : {}".format(current_lane.getID()))
+    #            print("surrounding lanes : {}".format([[lane.getID() for lane in lane_list] for lane_list in surrounding_lanes_sets]))
+    #            #print("vehicles : {}".format(vehicles))
+    #            print("")
+    #            for v in vehicles:
+    #                #print("vehicle {} in lanes : {}".format(v.vehicle_id, [lane.getID() for lane in vehicle_lanes[v.vehicle_id]]))
+    #                print("vehicle {} in local position : {}".format(v.vehicle_id, lane_local_offsets[v.vehicle_id]))
 
 
+        if a > 0:
+            brake = 0
+            throttle = a / vehicle.max_accel
+        else:
+            brake = - a / vehicle.max_brake
+            throttle = 0
 
         action = (throttle, brake, steering_angle)
         PureController.perform_action(vehicle, action, dt)
@@ -234,7 +256,7 @@ class SafetyPureLaneFollowingController:
     ):
         # For now this method simply passes the lane following action the safety controller, which should ensure that
         # each action is individually safe.
-        lane_change = 0
+        #lane_change = 0
         action = PureLaneFollowingController.get_action(sim, vehicle, sensor_state, dt, target_speed, lane_change)
         SafetyPureController.perform_action(sim, sensor_state, vehicle, action, dt)
 

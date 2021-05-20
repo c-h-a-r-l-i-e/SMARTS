@@ -62,6 +62,8 @@ class VehicleState:
     source: str = None  # the source of truth for this vehicle state
     linear_velocity: numpy.ndarray = None
     angular_velocity: numpy.ndarray = None
+    max_accel: float = 6
+    max_brake: float = 6
 
 
 @dataclass(frozen=True)
@@ -255,6 +257,8 @@ class Vehicle:
             source="SMARTS",
             linear_velocity=self._chassis.velocity_vectors[0],
             angular_velocity=self._chassis.velocity_vectors[1],
+            max_brake=self.max_brake,
+            max_accel=self.max_accel,
         )
 
     @property
