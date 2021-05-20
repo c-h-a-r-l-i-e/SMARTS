@@ -27,13 +27,14 @@ from smarts.core.controllers.pure_controller import (
     PureLaneFollowingController,
 )
 
+from sympy import S
+
 
 class CarsimCar:
     """
     An object which carsim.logic can take in order to calcualte safe actions
     """
-    # TODO: change this to accept a lane start/vector argument
-    def __init__(self, vehicle_state, lane_start, lane_heading):
+    def __init__(self, vehicle_state, lane_start, lane_heading, a=None):
         """
         Export a car to be used in carsim code, translating it relative to the provided lane.
 
@@ -41,21 +42,31 @@ class CarsimCar:
         ---------
         vehicle_state: VehicleState
             The vehicle we want to translate
-        ref_lane : sumo.Lane
-            The lane we want to translate relative to
-        road_network : SumoRoadNetwork
-            The road network we're working in
+        lane_start: np array
+            The starting position of the lane
+        lane_heading: float
+            The heading of the lane
+        a : float
+            The vehicle acceleration
         """
-        position = vehicle_state.pose.position[:2]
+        position = np.array(vehicle_state.pose.position[:2])
+        position -= lane_start
 
+        c, s = np.cos(-lane_heading), np.sin(-lane_heading)
+        rot = np.array(((c, -s), (s, c)))
+        position=rot.dot(position)
 
 
         self.v = vehicle_state.speed
-        self.x = vehicle_state.pose.position[0]
-        self.y = vehicle_state.pose.position[1]
-        self.theta = car.pose.heading
-        self.length = car.length
-        self.width = car.width
+        self.x = position[0]
+        self.y = position[1]
+        self.theta = (vehicle_state.pose.heading + np.pi / 2) - lane_heading
+        self.length = vehicle_state.dimensions.length
+        self.width = vehicle_state.dimensions.width
+        self.a = a
+
+    def __str__(self):
+        return "Vehicle @ ({}, {}) - {}".format(self.x, self.y, self.theta)
 
 
 
@@ -101,36 +112,73 @@ class SafetyPureController:
 
         ego_pos = road_network.offset_into_lane(current_lane, vehicle.pose.position[:2])
 
-        # TODO: calculate the starting point/angles for the current lane
-        start_point = 
+        # Calculate the starting point/angles for the current lane
+        start_point = road_network.world_coord_from_offset(current_lane, ego_pos)
+        start_vector = road_network.lane_vector_at_offset(current_lane, ego_pos)
+        start_heading = np.arctan2(start_vector[1], start_vector[0])
 
 
-
-        # 5. Generate the surroundings TODO: also convert to CarsimCar
+        # 5. Generate the surroundings and convert to CarsimCar
         surroundings = [[None, None] for i in range(len(surrounding_lanes))]
         for v in vehicles:
             for lane_num, surrounding_lane_set in enumerate(surrounding_lanes_sets):
                 if not vehicle_lanes[v.vehicle_id].isdisjoint(surrounding_lane_set):
                     if lane_local_offsets[v.vehicle_id] < ego_pos:
                         # Car is in surrounding lane, and behind ego vehicle
-                        surroundings[lane_num][0] = v
+                        surroundings[lane_num][0] = CarsimCar(v, start_point, start_heading)
                     else:
                         # Car is in surrounding lane, and ahead of ego vehicle
                         if surroundings[lane_num][1] is None:
-                            surroundings[lane_num][1] = v
-
-        # TODO: calculate the lane boundaries for the surrounding lanes
-
+                            surroundings[lane_num][1] = CarsimCar(v, start_point, start_heading)
+        ego_car = CarsimCar(vehicle.state, start_point, start_heading)
 
 
+        # 6. Work out the lane boundaries
+        lane_bounds = []
+        bound = 0
+        centre = None
+        for lane in surrounding_lanes:
+            width = lane.getWidth()
+            lane_bounds.append((bound, bound+width))
+            if lane == current_lane:
+                centre = bound + width / 2
+            bound += width
 
-        if vehicle.id[6] == "3":
+        if centre is None:
+            raise ValueError("Current lane is not in the surrounding lanes")
+
+        for i, lb in enumerate(lane_bounds):
+            lane_bounds[i] = (lb[0] - centre, lb[1] - centre)
+
+        # 7. Pass through to our safety checker, finding an action which is hopefully close to the original intention,
+        #    but definitely is safe.
+        ego_car.a = a
+        deltas = carsim.logic.calculate_safe_deltas(ego_car, lane_bounds, surroundings, dt)
+
+        # Check if deltas empty
+        if deltas == S.EmptySet:
+            a = - vehicle.max_brake
+            ego_car.a = a
+            deltas = carsim.logic.calculate_safe_deltas(ego_car, lane_bounds, surroundings, dt)
+
+        if deltas == S.EmptySet:
+
+            
+            # Set delta to follow lane somehow
+        else:
+
+
+        # Find closest delta
+
+        if vehicle.id[6] == "2":
             print("info from vehicle id: {}".format(vehicle.id))
             print("surroundings :")
             for surrounding in surroundings:
-                r = surrounding[0].vehicle_id if surrounding[0] is not None else None
-                f = surrounding[1].vehicle_id if surrounding[1] is not None else None
+                r = surrounding[0] if surrounding[0] is not None else None
+                f = surrounding[1] if surrounding[1] is not None else None
                 print("{}|{}".format(r, f))
+
+            print("lane_bounds = {}".format(lane_bounds))
 
 #            print("current_lane id : {}".format(current_lane.getID()))
 #            print("surrounding lanes : {}".format([[lane.getID() for lane in lane_list] for lane_list in surrounding_lanes_sets]))
@@ -140,21 +188,7 @@ class SafetyPureController:
 #                #print("vehicle {} in lanes : {}".format(v.vehicle_id, [lane.getID() for lane in vehicle_lanes[v.vehicle_id]]))
 #                print("vehicle {} in local position : {}".format(v.vehicle_id, lane_local_offsets[v.vehicle_id]))
 
-        # 3. Pass information to our safety calculator to work out a safe action, hopefully
-        #    close to the original action intention.
 
-#        deltas = carsim.logic.calculate_safe_deltas(...)
-#
-#        # Check if deltas empty
-#        if deltas empty:
-#            a = - vehicle.max_brake
-#            deltas = carsim.logic.calcaulte_safe_deltas(...)
-#
-#            if deltas empty:
-#                # Set delta to follow lane somehow
-#
-#
-#        # Find closest delta
 
         action = (throttle, brake, steering_angle)
         PureController.perform_action(vehicle, action, dt)
@@ -183,13 +217,6 @@ class SafetyPureController:
                 lanes.add(lane)
 
         return lanes
-            
-
-
-
-
-
-
 
 
 class SafetyPureLaneFollowingController:
@@ -210,5 +237,4 @@ class SafetyPureLaneFollowingController:
         lane_change = 0
         action = PureLaneFollowingController.get_action(sim, vehicle, sensor_state, dt, target_speed, lane_change)
         SafetyPureController.perform_action(sim, sensor_state, vehicle, action, dt)
-
 
