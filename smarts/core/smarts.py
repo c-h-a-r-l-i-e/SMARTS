@@ -28,6 +28,8 @@ from time import time
 import math
 import numpy
 
+import ray
+
 from envision import types as envision_types
 from envision.client import Client as EnvisionClient
 
@@ -791,6 +793,7 @@ class SMARTS:
     def _clear_collisions(self, vehicle_ids):
         for vehicle_id in vehicle_ids:
             self._vehicle_collisions.pop(vehicle_id, None)
+
 
     def _perform_agent_actions(self, agent_actions):
         for agent_id, action in agent_actions.items():

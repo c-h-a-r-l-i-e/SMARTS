@@ -19,6 +19,7 @@
 # THE SOFTWARE.
 from enum import Enum
 from functools import partial
+import ray
 
 import numpy as np
 

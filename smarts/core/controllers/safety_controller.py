@@ -28,12 +28,20 @@ from smarts.core.controllers.pure_controller import (
 )
 
 import carsim.logic
+import carsim.plot
 
 import sympy as sym
 from sympy import S
 
+import matplotlib.pyplot as plt
 
-class CarsimCar:
+DEBUG = True
+if DEBUG:
+    ax = plt.gca()
+    ax.set_aspect("equal")
+
+
+class CarsimCar(carsim.logic.CarFuture):
     """
     An object which carsim.logic can take in order to calcualte safe actions
     """
@@ -64,7 +72,7 @@ class CarsimCar:
 
         self.theta = (vehicle_state.pose.heading + np.pi / 2) - lane_heading
         # translate to rear bumper
-        position -= np.array((np.cos(self.theta), np.sin(self.theta))) * self.width/2
+        position -= np.array((np.cos(self.theta), np.sin(self.theta))) * self.length/2
 
         self.x = position[0]
         self.y = position[1]
@@ -74,7 +82,7 @@ class CarsimCar:
         self.a_max = vehicle_state.max_accel
 
     def __str__(self):
-        return "Vehicle @ ({}, {}) - {}".format(self.x, self.y, self.theta)
+        return "Veh@({:.2f}, {:.2f}) {:.2f}".format(self.x, self.y, self.theta)
 
 
 
@@ -164,6 +172,7 @@ class SafetyPureController:
         deltas = carsim.logic.get_safe_deltas(ego_car, lane_bounds, surroundings, dt)
 
         # Check if deltas empty
+        
         if deltas == S.EmptySet:
             print("no safe delta with accel = {}".format(a))
             a = - vehicle.max_brake
@@ -173,28 +182,40 @@ class SafetyPureController:
         if deltas == S.EmptySet:
             print("no safe delta with accel = 0")
             # There's no safe delta while max braking, so steer towards lane centre.
-            delta = start_heading - vehicle.pose.heading
+            if start_heading > vehicle.pose.heading:
+                delta = np.pi / 4
+            elif start_heading > vehicle.pose.heading:
+                delta = - np.pi / 4
+            else:
+                delta = 0
             
+        if DEBUG:
+            changed = False
         else:
             if not deltas.contains(delta):
                 # Action is deemed unsafe, so find the closest possible delta
                 boundary = deltas.boundary
                 assert isinstance(boundary, sym.FiniteSet)
                 delta = min(boundary.args, key=lambda d : abs(d-delta))
-                print("picked new delta = {}".format(delta))
+                if DEBUG:
+                    changed = True
 
-
-        DEBUG = True
         if DEBUG:
             if vehicle.id[6] == "2":
                 print("info from vehicle id: {}".format(vehicle.id))
                 print("surroundings :")
                 for surrounding in surroundings:
-                    r = surrounding[0] if surrounding[0] is not None else None
-                    f = surrounding[1] if surrounding[1] is not None else None
-                    print("{}|{}".format(r, f))
+                    print("{}|{}".format(surrounding[0], surrounding[1]))
+                if changed:
+                    ax.text(0,0,"picked new delta = {:.2f}".format(delta))
 
-                print("lane_bounds = {}".format(lane_bounds))
+                ax.clear()
+                carsim.plot.plot_surroundings_and_deltas(ego_car, surroundings, lane_bounds, dt, deltas, ax)
+                #ax.text(0,0,"delta = {:.2f}".format(delta))
+
+                plt.pause(0.1)
+
+                # print("lane_bounds = {}".format(lane_bounds))
 
     #            print("current_lane id : {}".format(current_lane.getID()))
     #            print("surrounding lanes : {}".format([[lane.getID() for lane in lane_list] for lane_list in surrounding_lanes_sets]))
@@ -212,6 +233,7 @@ class SafetyPureController:
             brake = - a / vehicle.max_brake
             throttle = 0
 
+        steering_angle = delta / (np.pi/4) 
         action = (throttle, brake, steering_angle)
         PureController.perform_action(vehicle, action, dt)
 
