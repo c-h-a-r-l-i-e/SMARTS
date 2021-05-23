@@ -68,6 +68,66 @@ class ActionSpaceType(Enum):
 
 class Controllers:
     @staticmethod
+    def perform_safe_actions(
+        sim,
+        vehicles,
+        actions,
+        sensor_states,
+        action_spaces,
+    ):
+        """
+        Seperate method needed for safe actions, as we must collect the safe actions first,
+        before later applying them, as otherwise state appears out of sync.
+        """
+        # TODO: remove sim references
+        safe_actions = []
+        for i in range(len(vehicles)):
+            vehicle = vehicles[i]
+            action = actions[i]
+            sensor_state = sensor_states[i]
+            action_space = action_spaces[i]
+
+            if action_space == ActionSpaceType.SafetyPureContinuous:
+                safe_action = SafetyPureController.get_action(
+                    sim, sensor_state, vehicle, action, dt=sim.timestep_sec
+                )
+
+            elif action_space == ActionSpaceType.SafetyPureLane:
+                get_lane_following = partial(
+                    SafetyPureLaneFollowingController.get_lane_following,
+                    sim=sim,
+                    vehicle=vehicle,
+                    sensor_state=sensor_state,
+                    dt = sim.timestep_sec,
+                )
+
+                # 12.5 m/s (45 km/h) is used as the nominal speed for lane change.
+                # For keep_lane, the nominal speed is set to 15 m/s (54 km/h).
+                if action == "keep_lane":
+                    safe_action = get_lane_following(target_speed=15, lane_change=0)
+                elif action == "slow_down":
+                    safe_action = get_lane_following(target_speed=0, lane_change=0)
+                elif action == "change_lane_left":
+                    safe_action = get_lane_following(target_speed=12.5, lane_change=1)
+                elif action == "change_lane_right":
+                    safe_action = get_lane_following(target_speed=12.5, lane_change=-1)
+
+            else:
+                raise ValueError(
+                    f"perform_safe_actions(action_space={action_space}, ...) has failed "
+                    "inside controller"
+                )
+
+            safe_actions.append(safe_action)
+
+        for i in range(len(vehicles)):
+            vehicle = vehicles[i]
+            action = safe_actions[i]
+            PureController.perform_action(vehicle, action, dt=sim.timestep_sec)
+
+
+
+    @staticmethod
     def perform_action(
         sim,
         agent_id,
@@ -147,7 +207,6 @@ class Controllers:
                 sim=sim,
                 agent_id=agent_id,
                 vehicle=vehicle,
-                controller_state=controller_state,
                 sensor_state=sensor_state,
                 dt = sim.timestep_sec,
             )
@@ -172,7 +231,6 @@ class Controllers:
                 sim=sim,
                 agent_id=agent_id,
                 vehicle=vehicle,
-                controller_state=controller_state,
                 sensor_state=sensor_state,
                 dt = sim.timestep_sec,
             )

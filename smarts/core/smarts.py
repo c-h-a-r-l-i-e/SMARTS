@@ -120,6 +120,8 @@ class SMARTS:
         self._pure_action_spaces = {
             ActionSpaceType.PureContinuous,
             ActionSpaceType.PureLane,
+        }
+        self._safety_action_spaces = {
             ActionSpaceType.SafetyPureContinuous,
             ActionSpaceType.SafetyPureLane,
         }
@@ -634,6 +636,36 @@ class SMARTS:
 
         return provider_state
 
+
+    def _safety_provider_step(self, agent_actions) -> ProviderState:
+        self._perform_safety_agent_actions(agent_actions)
+
+        provider_state = ProviderState()
+        safety_agent_ids = {
+            agent_id
+            for agent_id, interface in self._agent_manager.agent_interfaces.items()
+            if interface.action_space in self._safety_action_spaces
+        }
+
+        for vehicle_id in self._vehicle_index.agent_vehicle_ids():
+            agent_id = self._vehicle_index.actor_id_from_vehicle_id(vehicle_id)
+            if agent_id not in safety_agent_ids:
+                continue
+
+            vehicle = self._vehicle_index.vehicle_by_id(vehicle_id)
+            provider_state.vehicles.append(
+                VehicleState(
+                    vehicle_id=vehicle.id,
+                    vehicle_type="passenger",
+                    pose=vehicle.pose,
+                    dimensions=vehicle.chassis.dimensions,
+                    speed=vehicle.speed,
+                    source="SAFETY",
+                )
+            )
+
+        return provider_state
+
     @property
     def vehicle_index(self):
         return self._vehicle_index
@@ -703,6 +735,15 @@ class SMARTS:
                and matches_provider_action_spaces(agent_id, self._pure_action_spaces)
         }
         accumulated_provider_state.merge(self._pure_provider_step(pure_actions))
+
+        # Pure Physics with safety checks
+        safe_actions = {
+            agent_id: action
+            for agent_id, action in actions.items()
+            if agent_controls_vehicles(agent_id)
+               and matches_provider_action_spaces(agent_id, self._safety_action_spaces)
+        }
+        accumulated_provider_state.merge(self._safety_provider_step(safe_actions))
 
         for provider in self.providers:
             provider_state = self._step_provider(provider, actions, dt)
@@ -828,6 +869,40 @@ class SMARTS:
                         agent_interface.action_space,
                         agent_interface.vehicle_type,
                     )
+
+
+    def _perform_safety_agent_actions(self, agent_actions):
+        vehicles = []
+        vehicle_actions = []
+        sensor_states = []
+        action_spaces = []
+        
+        for agent_id, action in agent_actions.items():
+            agent_vehicles = self._vehicle_index.vehicles_by_actor_id(agent_id)
+            if len(agent_vehicles) == 0:
+                self._log.warning(
+                    f"{agent_id} doesn't have a vehicle, is the agent done? (dropping action)"
+                )
+            else:
+                agent_interface = self._agent_manager.agent_interface_for_agent_id(
+                    agent_id
+                )
+                is_boid_agent = self._agent_manager.is_boid_agent(agent_id)
+
+                for vehicle in agent_vehicles:
+                    vehicles.append(vehicle)
+                    vehicle_actions.append(action[vehicle.id] if is_boid_agent else action)
+                    sensor_states.append(self._vehicle_index.sensor_state_for_vehicle_id(vehicle.id))
+                    action_spaces.append(agent_interface.action_space)
+
+        Controllers.perform_safe_actions(
+            self,
+            vehicles,
+            vehicle_actions,
+            sensor_states,
+            action_spaces,
+        )
+
 
     def _sync_vehicles_to_renderer(self):
         assert self._renderer

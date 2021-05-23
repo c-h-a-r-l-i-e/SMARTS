@@ -37,9 +37,11 @@ import matplotlib.pyplot as plt
 
 DEBUG = True
 if DEBUG:
-    ax = plt.gca()
-    ax.set_aspect("equal")
+    fig, (ax0, ax1) = plt.subplots(2)
+    ax0.set_aspect("equal")
+    ax1.set_aspect("equal")
 
+#TODO: create new safety provider which will first gather actions, and then perform them!
 
 class CarsimCar(carsim.logic.CarFuture):
     """
@@ -85,15 +87,14 @@ class CarsimCar(carsim.logic.CarFuture):
         return "Veh@({:.2f}, {:.2f}) {:.2f}".format(self.x, self.y, self.theta)
 
 
-
 class SafetyPureController:
     @classmethod
-    def perform_action(cls, sim, sensor_state, vehicle, action, dt): # TODO: change the call for this to match
+    def get_action(cls, sim, sensor_state, vehicle, action, dt):
         """
-        Check if an action is safe, and if not modify it to be as safe as possible, then
-        execute using pure physics (no pybullet).
+        Retrieve a safe action for the given vehicle. This controller atempts to ensure:
+            a) the action is safe
+            b) the action is as close to the original action as possible
         """
-        assert isinstance(vehicle.chassis, BoxChassis)
         # Process the action inputs
         throttle, brake, steering_angle = action
         
@@ -108,11 +109,14 @@ class SafetyPureController:
 
         # Calculate safe actions
         # 1. Get all surrounding vehicles
+        # TODO: remove sim references
         vehicles = sim.neighborhood_vehicles_around_vehicle(vehicle = vehicle, radius = np.inf) 
 
         # 2. Calculate ego vehicle surrounding lanes list
-        current_lane = road_network.nearest_lane(vehicle.pose.position[:2])
+        front_bumper = vehicle.pose.position[:2]
+        current_lane = road_network.nearest_lane(front_bumper)
         surrounding_lanes = current_lane.getEdge().getLanes()
+        
         surrounding_lanes_sets = [{*lane.getIncoming(), lane} for lane in surrounding_lanes] # extend with road predecessors
         all_surrounding_lanes_set = set.union(*surrounding_lanes_sets)
 
@@ -126,7 +130,7 @@ class SafetyPureController:
         lane_local_offsets = {v.vehicle_id: road_network.offset_into_lane(current_lane, v.pose.position[:2]) for v in vehicles}
         vehicles.sort(key = lambda v : lane_local_offsets[v.vehicle_id])
 
-        ego_pos = road_network.offset_into_lane(current_lane, vehicle.pose.position[:2])
+        ego_pos = np.clip(road_network.offset_into_lane(current_lane, vehicle.pose.position[:2]), 0, current_lane.getLength())
 
         # Calculate the starting point/angles for the current lane
         start_point = road_network.world_coord_from_offset(current_lane, ego_pos)
@@ -171,49 +175,62 @@ class SafetyPureController:
         ego_car.a = a
         deltas = carsim.logic.get_safe_deltas(ego_car, lane_bounds, surroundings, dt)
 
+        if DEBUG:
+            changed = False
+
         # Check if deltas empty
-        
         if deltas == S.EmptySet:
             print("no safe delta with accel = {}".format(a))
             a = - vehicle.max_brake
             ego_car.a = a
             deltas = carsim.logic.get_safe_deltas(ego_car, lane_bounds, surroundings, dt)
 
-        if deltas == S.EmptySet:
-            print("no safe delta with accel = 0")
-            # There's no safe delta while max braking, so steer towards lane centre.
-            if start_heading > vehicle.pose.heading:
-                delta = np.pi / 4
-            elif start_heading > vehicle.pose.heading:
-                delta = - np.pi / 4
-            else:
-                delta = 0
+            if deltas == S.EmptySet:
+                print("no safe delta with accel = {}".format(-vehicle.max_brake))
+                # There's no safe delta while max braking, so steer towards lane centre.
+                delta =  -start_heading + vehicle.pose.heading + np.pi/2
+                print("picked delta = {}".format(delta))
             
-        if DEBUG:
-            changed = False
-        else:
-            if not deltas.contains(delta):
-                # Action is deemed unsafe, so find the closest possible delta
-                boundary = deltas.boundary
-                assert isinstance(boundary, sym.FiniteSet)
-                delta = min(boundary.args, key=lambda d : abs(d-delta))
-                if DEBUG:
-                    changed = True
+        if deltas != S.EmptySet and not deltas.contains(delta):
+            # Action is deemed unsafe, so find the closest possible delta, by extracting the boundary of 
+            # the delta set, and picking the closest boundary
+            boundary = deltas.boundary
+            assert isinstance(boundary, sym.FiniteSet)
+            new_delta = float(min(boundary.args, key=lambda d : abs(d-delta)))
+            safety_thresh = 0.05
+            if new_delta > delta:
+                delta = new_delta + safety_thresh
+            else:
+                delta = new_delta - safety_thresh
+            if DEBUG:
+                changed = True
 
         if DEBUG:
             if vehicle.id[6] == "2":
-                print("info from vehicle id: {}".format(vehicle.id))
-                print("surroundings :")
-                for surrounding in surroundings:
-                    print("{}|{}".format(surrounding[0], surrounding[1]))
+                ax0.clear()
+                carsim.plot.plot_surroundings_and_deltas(ego_car, surroundings, lane_bounds, dt, deltas, ax0)
                 if changed:
-                    ax.text(0,0,"picked new delta = {:.2f}".format(delta))
+                    ax0.text(0,0,"picked new delta = {:.2f}".format(delta))
 
-                ax.clear()
-                carsim.plot.plot_surroundings_and_deltas(ego_car, surroundings, lane_bounds, dt, deltas, ax)
+                ax0.text(1, 1, "on road {}".format(current_lane.getID()))
+            if vehicle.id[6] == "3":
+                #print("info from vehicle id: {}".format(vehicle.id))
+                #print("surroundings :")
+                #for surrounding in surroundings:
+                #    print("{}|{}".format(surrounding[0], surrounding[1]))
+
+                ax1.clear()
+                carsim.plot.plot_surroundings_and_deltas(ego_car, surroundings, lane_bounds, dt, deltas, ax1)
+                if changed:
+                    ax1.text(0,0,"picked new delta = {:.2f}".format(delta))
                 #ax.text(0,0,"delta = {:.2f}".format(delta))
+                surround_txt = "surrounding lanes : {}".format([[lane.getID() for lane in lane_list] for lane_list in surrounding_lanes_sets])
+                v_id = vehicles[-1].vehicle_id
+                on_road_txt = "veh {} is on {}".format(v_id, [l.getID() for l in vehicle_lanes[v_id]])
+                ax1.text(2,2, surround_txt)
+                ax1.text(2,1, on_road_txt)
 
-                plt.pause(0.1)
+                plt.pause(0.01)
 
                 # print("lane_bounds = {}".format(lane_bounds))
 
@@ -232,12 +249,27 @@ class SafetyPureController:
         else:
             brake = - a / vehicle.max_brake
             throttle = 0
-
         steering_angle = delta / (np.pi/4) 
+
         action = (throttle, brake, steering_angle)
+
+        return action
+
+    @staticmethod
+    def get_front_bumper(vehicle_state):
+        position = np.array(vehicle_state.pose.position[:2])
+        theta = vehicle_state.pose.heading + np.pi/2
+        position += np.array((np.cos(theta), np.sin(theta))) * vehicle_state.dimensions.length/2
+        return position
+
+    @classmethod
+    def perform_action(cls, sim, sensor_state, vehicle, action, dt):
+        """
+        Check if an action is safe, and if not modify it to be as safe as possible, then
+        execute using pure physics (no pybullet).
+        """
+        action = SafetyPureController.get_action(cls, sim, sensor_state, vehicle, action, dt)
         PureController.perform_action(vehicle, action, dt)
-
-
 
     @staticmethod
     def get_vehicle_lanes(vehicle, road_network):
@@ -248,7 +280,7 @@ class SafetyPureController:
 
         # Offsets are all the corners of the vehicle 
         # If some vehicles are not registering in a lane, may be worth adding more offsets
-        offsets = np.array(((l/2, w/2), (l/2, -w/2), (-l/2, w/2), (-l/2, -w/2)))
+        offsets = np.array(((l/2, w/2), (l/2, -w/2), (-l/2, w/2), (-l/2, -w/2), (0, 0)))
         c, s = np.cos(heading), np.sin(heading)
         rot = np.array(((c, -s), (s, c)))
         offsets = np.array([rot.dot(offset) for offset in offsets])
@@ -270,7 +302,6 @@ class SafetyPureLaneFollowingController:
         sim,
         agent_id,
         vehicle,
-        controller_state,
         sensor_state,
         dt,
         target_speed=12.5,
@@ -281,4 +312,23 @@ class SafetyPureLaneFollowingController:
         #lane_change = 0
         action = PureLaneFollowingController.get_action(sim, vehicle, sensor_state, dt, target_speed, lane_change)
         SafetyPureController.perform_action(sim, sensor_state, vehicle, action, dt)
+
+    @classmethod
+    def get_lane_following(
+        cls,
+        sim,
+        vehicle,
+        sensor_state,
+        dt,
+        target_speed=12.5,
+        lane_change=0,
+    ):
+        # For now this method simply passes the lane following action the safety controller, which should ensure that
+        # each action is individually safe.
+        #lane_change = 0
+        action = PureLaneFollowingController.get_action(sim, vehicle, sensor_state, dt, target_speed, lane_change)
+        action = SafetyPureController.get_action(sim, sensor_state, vehicle, action, dt)
+        return action
+
+
 
