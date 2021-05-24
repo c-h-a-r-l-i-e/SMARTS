@@ -35,7 +35,7 @@ from sympy import S
 
 import matplotlib.pyplot as plt
 
-DEBUG = True
+DEBUG = False
 if DEBUG:
     fig, (ax0, ax1) = plt.subplots(2)
     ax0.set_aspect("equal")
@@ -109,7 +109,7 @@ class SafetyPureController:
 
         # Calculate safe actions
         # 1. Get all surrounding vehicles
-        # TODO: remove sim references
+        # TODO: remove sim references, then start to parallelize
         vehicles = sim.neighborhood_vehicles_around_vehicle(vehicle = vehicle, radius = np.inf) 
 
         # 2. Calculate ego vehicle surrounding lanes list
@@ -122,12 +122,17 @@ class SafetyPureController:
 
         # 3. For each vehicle, work out which lanes they're in
         vehicle_lanes = {v.vehicle_id: SafetyPureController.get_vehicle_lanes(v, road_network) for v in vehicles}
+        if DEBUG:
+            vehicle2 = [v for v in vehicles if v.vehicle_id[6] == "2"]
+            vehicle2_id = None if len(vehicle2) == 0 else vehicle2[0].vehicle_id
+            is_disjoint = None if len(vehicle2) == 0 else vehicle_lanes[vehicle2_id].isdisjoint(all_surrounding_lanes_set)
+
         # filter out vehicles not in the surrounding lanes
         vehicles = [v for v in vehicles if not vehicle_lanes[v.vehicle_id].isdisjoint(all_surrounding_lanes_set)]
 
 
         # 4. Order vehicles based on distance along ego vehicle's road
-        lane_local_offsets = {v.vehicle_id: road_network.offset_into_lane(current_lane, v.pose.position[:2]) for v in vehicles}
+        lane_local_offsets = {v.vehicle_id: cls.get_distance_into_lane(current_lane, v, road_network) for v in vehicles}
         vehicles.sort(key = lambda v : lane_local_offsets[v.vehicle_id])
 
         ego_pos = np.clip(road_network.offset_into_lane(current_lane, vehicle.pose.position[:2]), 0, current_lane.getLength())
@@ -180,16 +185,13 @@ class SafetyPureController:
 
         # Check if deltas empty
         if deltas == S.EmptySet:
-            print("no safe delta with accel = {}".format(a))
             a = - vehicle.max_brake
             ego_car.a = a
             deltas = carsim.logic.get_safe_deltas(ego_car, lane_bounds, surroundings, dt)
 
             if deltas == S.EmptySet:
-                print("no safe delta with accel = {}".format(-vehicle.max_brake))
                 # There's no safe delta while max braking, so steer towards lane centre.
                 delta =  -start_heading + vehicle.pose.heading + np.pi/2
-                print("picked delta = {}".format(delta))
             
         if deltas != S.EmptySet and not deltas.contains(delta):
             # Action is deemed unsafe, so find the closest possible delta, by extracting the boundary of 
@@ -225,10 +227,10 @@ class SafetyPureController:
                     ax1.text(0,0,"picked new delta = {:.2f}".format(delta))
                 #ax.text(0,0,"delta = {:.2f}".format(delta))
                 surround_txt = "surrounding lanes : {}".format([[lane.getID() for lane in lane_list] for lane_list in surrounding_lanes_sets])
-                v_id = vehicles[-1].vehicle_id
-                on_road_txt = "veh {} is on {}".format(v_id, [l.getID() for l in vehicle_lanes[v_id]])
+                on_road_txt = "veh is on {}, disjoint={}".format([l.getID() for l in vehicle_lanes[vehicle2_id]] if vehicle2_id is not None else None, is_disjoint)
                 ax1.text(2,2, surround_txt)
                 ax1.text(2,1, on_road_txt)
+                ax1.text(0,0, "{}".format(lane_local_offsets))
 
                 plt.pause(0.01)
 
@@ -261,6 +263,15 @@ class SafetyPureController:
         theta = vehicle_state.pose.heading + np.pi/2
         position += np.array((np.cos(theta), np.sin(theta))) * vehicle_state.dimensions.length/2
         return position
+
+
+    @staticmethod
+    def get_distance_into_lane(lane, veh_state, road_network):
+        offset = road_network.offset_into_lane(lane, veh_state.pose.position[:2])
+        if offset == 0: # in case we are before the lane begins then find the euclidean distance from the start of the lane to use
+            offset = - np.linalg.norm(road_network.world_coord_from_offset(lane, 0) - np.array(veh_state.pose.position[:2]))
+        return offset
+
 
     @classmethod
     def perform_action(cls, sim, sensor_state, vehicle, action, dt):
