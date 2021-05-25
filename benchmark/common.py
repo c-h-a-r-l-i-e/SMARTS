@@ -164,6 +164,14 @@ class ActionSpace:
             )
         elif space_type == ActionSpaceType.PureLane:
             return gym.spaces.Discrete(4)
+        elif space_type == ActionSpaceType.SafetyPureContinuous:
+            return gym.spaces.Box(
+                low=np.array([0.0, 0.0, -1.0]),
+                high=np.array([1.0, 1.0, 1.0]),
+                dtype=np.float32,
+            )
+        elif space_type == ActionSpaceType.SafetyPureLane:
+            return gym.spaces.Discrete(4)
         else:
             raise NotImplementedError
 
@@ -847,6 +855,10 @@ class ActionAdapter:
         if space_type == ActionSpaceType.PureContinuous:
             return ActionAdapter.continuous_action_adapter
         if space_type == ActionSpaceType.PureLane:
+            return ActionAdapter.discrete_action_adapter
+        if space_type == ActionSpaceType.SafetyPureContinuous:
+            return ActionAdapter.continuous_action_adapter
+        if space_type == ActionSpaceType.SafetyPureLane:
             return ActionAdapter.discrete_action_adapter
         else:
             raise NotImplementedError
