@@ -23,6 +23,8 @@ import ray
 
 import numpy as np
 
+from pathos.helpers import mp
+
 from smarts.core.controllers.actuator_dynamic_controller import (
     ActuatorDynamicController,
     ActuatorDynamicControllerState,
@@ -79,8 +81,7 @@ class Controllers:
         Seperate method needed for safe actions, as we must collect the safe actions first,
         before later applying them, as otherwise state appears out of sync.
         """
-        # TODO: remove sim references
-        safe_actions = []
+        args = []
         for i in range(len(vehicles)):
             vehicle = vehicles[i]
             action = actions[i]
@@ -110,10 +111,11 @@ class Controllers:
 
 
             if action_space in [ActionSpaceType.SafetyPureContinuous, ActionSpaceType.SafetyPureLane]:
-                # TODO: work out multitasking!
-                safe_action = SafetyPureController.get_action(
-                    other_veh_states, sensor_state, vehicle, action, sim.timestep_sec
-                )
+                #safe_action = SafetyPureController.get_action(
+                #    other_veh_states, sensor_state, vehicle, action, sim.timestep_sec
+                #)
+                #args.append( (other_veh_states, sensor_state, vehicle, action, sim.timestep_sec) )
+                args.append( SafetyPureController.get_reqs(other_veh_states, sensor_state, vehicle, action, sim.timestep_sec)) 
 
             else:
                 raise ValueError(
@@ -121,8 +123,9 @@ class Controllers:
                     "inside controller"
                 )
 
-            safe_actions.append(safe_action)
-
+        # Perform action across multiple cores
+        pool = mp.Pool(mp.cpu_count())
+        safe_actions = pool.map(SafetyPureController.get_safe_action, args)
 
         for i in range(len(vehicles)):
             vehicle = vehicles[i]

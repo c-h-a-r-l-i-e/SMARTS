@@ -90,49 +90,24 @@ class CarsimCar(carsim.logic.CarFuture):
     def __str__(self):
         return "Veh@({:.2f}, {:.2f}) {:.2f}".format(self.x, self.y, self.theta)
 
-def get_safe_action(ego_car, lane_bounds, surroundings, dt, start_heading, heading, a):
-    print("starting safe actions")
-    deltas = carsim.logic.get_safe_deltas(ego_car, lane_bounds, surroundings, dt)
 
-    # Check if deltas empty
-    if deltas == S.EmptySet:
-        a = - vehicle.max_brake
-        ego_car.a = a
-        deltas = carsim.logic.get_safe_deltas(ego_car, lane_bounds, surroundings, dt)
-
-        if deltas == S.EmptySet:
-            # There's no safe delta while max braking, so steer towards lane centre.
-            delta =  -start_heading + heading + np.pi/2
-        
-    if deltas != S.EmptySet and not deltas.contains(delta):
-        # Action is deemed unsafe, so find the closest possible delta, by extracting the boundary of 
-        # the delta set, and picking the closest boundary
-        boundary = deltas.boundary
-        new_delta = float(min(boundary.args, key=lambda d : abs(d-delta)))
-        safety_thresh = 0.05
-        if new_delta > delta:
-            delta = new_delta + safety_thresh
-        else:
-            delta = new_delta - safety_thresh
-
-    if a > 0:
-        brake = 0
-        throttle = a / vehicle.max_accel
-    else:
-        brake = - a / vehicle.max_brake
-        throttle = 0
-
-    steering_angle = delta / (np.pi/4) 
-
-    action = (throttle, brake, steering_angle)
-    print("finished safe actions")
-
-    return action
+class SafeDeltaRequirements:
+    """
+    This class contains the objects required for calculating safe actions for a vehicle
+    """
+    def __init__(self, ego_car, lane_bounds, surroundings, dt, start_heading, heading, delta):
+        self.ego_car = ego_car
+        self.lane_bounds = lane_bounds
+        self.surroundings = surroundings
+        self.dt = dt
+        self.start_heading = start_heading
+        self.heading = heading
+        self.delta = delta
 
 
 class SafetyPureController:
     @staticmethod
-    def get_remote_action(vehicles, sensor_state, vehicle, action, dt):
+    def get_reqs(vehicles, sensor_state, vehicle, action, dt):
         # Process the action inputs
         start_t = time.perf_counter()
 
@@ -210,11 +185,54 @@ class SafetyPureController:
         start_t = time.perf_counter()
         ego_car.a = a
 
-        # 6. Pass through to our safety checker, finding an action which is hopefully close to the original intention,
-        #    but definitely is safe.
-        action_ref = get_safe_action.remote(ego_car, lane_bounds, surroundings, dt, start_heading, vehicle.pose.heading, a)
+        reqs = SafeDeltaRequirements(ego_car, lane_bounds, surroundings, dt, start_heading, vehicle.pose.heading, delta)
 
-        return action_ref
+        return reqs
+
+    @staticmethod
+    def get_safe_action(reqs):
+        ego_car = reqs.ego_car
+        lane_bounds = reqs.lane_bounds
+        surroundings = reqs.surroundings
+        dt = reqs.dt
+        start_heading = reqs.start_heading
+        delta = reqs.delta
+        a = ego_car.a
+        deltas = carsim.logic.get_safe_deltas(ego_car, lane_bounds, surroundings, dt)
+
+        # Check if deltas empty
+        if deltas == S.EmptySet:
+            a = - vehicle.max_brake
+            ego_car.a = a
+            deltas = carsim.logic.get_safe_deltas(ego_car, lane_bounds, surroundings, dt)
+
+            if deltas == S.EmptySet:
+                # There's no safe delta while max braking, so steer towards lane centre.
+                delta =  -start_heading + heading + np.pi/2
+            
+        if deltas != S.EmptySet and not deltas.contains(delta):
+            # Action is deemed unsafe, so find the closest possible delta, by extracting the boundary of 
+            # the delta set, and picking the closest boundary
+            boundary = deltas.boundary
+            new_delta = float(min(boundary.args, key=lambda d : abs(d-delta)))
+            safety_thresh = 0.05
+            if new_delta > delta:
+                delta = new_delta + safety_thresh
+            else:
+                delta = new_delta - safety_thresh
+
+        if a > 0:
+            brake = 0
+            throttle = a / ego_car.a_max
+        else:
+            brake = - a / ego_car.brake_max
+            throttle = 0
+
+        steering_angle = delta / (np.pi/4) 
+
+        action = (throttle, brake, steering_angle)
+
+        return action
 
 
     @staticmethod
