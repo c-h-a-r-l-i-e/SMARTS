@@ -202,7 +202,7 @@ class SafetyPureController:
 
         # Check if deltas empty
         if deltas == S.EmptySet:
-            a = - vehicle.max_brake
+            a = - ego_car.brake_max
             ego_car.a = a
             deltas = carsim.logic.get_safe_deltas(ego_car, lane_bounds, surroundings, dt)
 
