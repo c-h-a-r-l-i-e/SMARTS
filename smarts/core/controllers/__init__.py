@@ -86,15 +86,11 @@ class Controllers:
             action = actions[i]
             sensor_state = sensor_states[i]
             action_space = action_spaces[i]
+            other_veh_states = sim.neighborhood_vehicles_around_vehicle(vehicle=vehicle)
 
-            if action_space == ActionSpaceType.SafetyPureContinuous:
-                safe_action = SafetyPureController.get_action(
-                    sim, sensor_state, vehicle, action, dt=sim.timestep_sec
-                )
-
-            elif action_space == ActionSpaceType.SafetyPureLane:
+            if action_space == ActionSpaceType.SafetyPureLane:
                 get_lane_following = partial(
-                    SafetyPureLaneFollowingController.get_lane_following,
+                    PureLaneFollowingController.get_action,
                     sim=sim,
                     vehicle=vehicle,
                     sensor_state=sensor_state,
@@ -104,13 +100,20 @@ class Controllers:
                 # 12.5 m/s (45 km/h) is used as the nominal speed for lane change.
                 # For keep_lane, the nominal speed is set to 15 m/s (54 km/h).
                 if action == "keep_lane":
-                    safe_action = get_lane_following(target_speed=15, lane_change=0)
+                    action = get_lane_following(target_speed=15, lane_change=0)
                 elif action == "slow_down":
-                    safe_action = get_lane_following(target_speed=0, lane_change=0)
+                    action = get_lane_following(target_speed=0, lane_change=0)
                 elif action == "change_lane_left":
-                    safe_action = get_lane_following(target_speed=12.5, lane_change=1)
+                    action = get_lane_following(target_speed=12.5, lane_change=1)
                 elif action == "change_lane_right":
-                    safe_action = get_lane_following(target_speed=12.5, lane_change=-1)
+                    action = get_lane_following(target_speed=12.5, lane_change=-1)
+
+
+            if action_space in [ActionSpaceType.SafetyPureContinuous, ActionSpaceType.SafetyPureLane]:
+                # TODO: work out multitasking!
+                safe_action = SafetyPureController.get_action(
+                    other_veh_states, sensor_state, vehicle, action, sim.timestep_sec
+                )
 
             else:
                 raise ValueError(
@@ -119,6 +122,7 @@ class Controllers:
                 )
 
             safe_actions.append(safe_action)
+
 
         for i in range(len(vehicles)):
             vehicle = vehicles[i]

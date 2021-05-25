@@ -35,6 +35,10 @@ from sympy import S
 
 import matplotlib.pyplot as plt
 
+import time
+
+import ray
+
 DEBUG = False
 if DEBUG:
     fig, (ax0, ax1) = plt.subplots(2)
@@ -86,16 +90,52 @@ class CarsimCar(carsim.logic.CarFuture):
     def __str__(self):
         return "Veh@({:.2f}, {:.2f}) {:.2f}".format(self.x, self.y, self.theta)
 
+def get_safe_action(ego_car, lane_bounds, surroundings, dt, start_heading, heading, a):
+    print("starting safe actions")
+    deltas = carsim.logic.get_safe_deltas(ego_car, lane_bounds, surroundings, dt)
+
+    # Check if deltas empty
+    if deltas == S.EmptySet:
+        a = - vehicle.max_brake
+        ego_car.a = a
+        deltas = carsim.logic.get_safe_deltas(ego_car, lane_bounds, surroundings, dt)
+
+        if deltas == S.EmptySet:
+            # There's no safe delta while max braking, so steer towards lane centre.
+            delta =  -start_heading + heading + np.pi/2
+        
+    if deltas != S.EmptySet and not deltas.contains(delta):
+        # Action is deemed unsafe, so find the closest possible delta, by extracting the boundary of 
+        # the delta set, and picking the closest boundary
+        boundary = deltas.boundary
+        new_delta = float(min(boundary.args, key=lambda d : abs(d-delta)))
+        safety_thresh = 0.05
+        if new_delta > delta:
+            delta = new_delta + safety_thresh
+        else:
+            delta = new_delta - safety_thresh
+
+    if a > 0:
+        brake = 0
+        throttle = a / vehicle.max_accel
+    else:
+        brake = - a / vehicle.max_brake
+        throttle = 0
+
+    steering_angle = delta / (np.pi/4) 
+
+    action = (throttle, brake, steering_angle)
+    print("finished safe actions")
+
+    return action
+
 
 class SafetyPureController:
-    @classmethod
-    def get_action(cls, sim, sensor_state, vehicle, action, dt):
-        """
-        Retrieve a safe action for the given vehicle. This controller atempts to ensure:
-            a) the action is safe
-            b) the action is as close to the original action as possible
-        """
+    @staticmethod
+    def get_remote_action(vehicles, sensor_state, vehicle, action, dt):
         # Process the action inputs
+        start_t = time.perf_counter()
+
         throttle, brake, steering_angle = action
         
         throttle = np.clip(throttle, 0, 1)
@@ -108,11 +148,7 @@ class SafetyPureController:
         road_network = sensor_state.mission_planner._road_network
 
         # Calculate safe actions
-        # 1. Get all surrounding vehicles
-        # TODO: remove sim references, then start to parallelize
-        vehicles = sim.neighborhood_vehicles_around_vehicle(vehicle = vehicle, radius = np.inf) 
-
-        # 2. Calculate ego vehicle surrounding lanes list
+        # 1. Calculate ego vehicle surrounding lanes list
         front_bumper = vehicle.pose.position[:2]
         current_lane = road_network.nearest_lane(front_bumper)
         surrounding_lanes = current_lane.getEdge().getLanes()
@@ -120,19 +156,15 @@ class SafetyPureController:
         surrounding_lanes_sets = [{*lane.getIncoming(), lane} for lane in surrounding_lanes] # extend with road predecessors
         all_surrounding_lanes_set = set.union(*surrounding_lanes_sets)
 
-        # 3. For each vehicle, work out which lanes they're in
+        # 2. For each vehicle, work out which lanes they're in
         vehicle_lanes = {v.vehicle_id: SafetyPureController.get_vehicle_lanes(v, road_network) for v in vehicles}
-        if DEBUG:
-            vehicle2 = [v for v in vehicles if v.vehicle_id[6] == "2"]
-            vehicle2_id = None if len(vehicle2) == 0 else vehicle2[0].vehicle_id
-            is_disjoint = None if len(vehicle2) == 0 else vehicle_lanes[vehicle2_id].isdisjoint(all_surrounding_lanes_set)
 
         # filter out vehicles not in the surrounding lanes
         vehicles = [v for v in vehicles if not vehicle_lanes[v.vehicle_id].isdisjoint(all_surrounding_lanes_set)]
 
 
-        # 4. Order vehicles based on distance along ego vehicle's road
-        lane_local_offsets = {v.vehicle_id: cls.get_distance_into_lane(current_lane, v, road_network) for v in vehicles}
+        # 3. Order vehicles based on distance along ego vehicle's road
+        lane_local_offsets = {v.vehicle_id: SafetyPureController.get_distance_into_lane(current_lane, v, road_network) for v in vehicles}
         vehicles.sort(key = lambda v : lane_local_offsets[v.vehicle_id])
 
         ego_pos = np.clip(road_network.offset_into_lane(current_lane, vehicle.pose.position[:2]), 0, current_lane.getLength())
@@ -143,7 +175,7 @@ class SafetyPureController:
         start_heading = np.arctan2(start_vector[1], start_vector[0])
 
 
-        # 5. Generate the surroundings and convert to CarsimCar
+        # 4. Generate the surroundings and convert to CarsimCar
         surroundings = [[None, None] for i in range(len(surrounding_lanes))]
         for v in vehicles:
             for lane_num, surrounding_lane_set in enumerate(surrounding_lanes_sets):
@@ -158,7 +190,7 @@ class SafetyPureController:
         ego_car = CarsimCar(vehicle.state, start_point, start_heading)
 
 
-        # 6. Work out the lane boundaries
+        # 5. Work out the lane boundaries
         lane_bounds = []
         bound = 0
         centre = None
@@ -175,10 +207,108 @@ class SafetyPureController:
         for i, lb in enumerate(lane_bounds):
             lane_bounds[i] = (lb[0] - centre, lb[1] - centre)
 
-        # 7. Pass through to our safety checker, finding an action which is hopefully close to the original intention,
+        start_t = time.perf_counter()
+        ego_car.a = a
+
+        # 6. Pass through to our safety checker, finding an action which is hopefully close to the original intention,
+        #    but definitely is safe.
+        action_ref = get_safe_action.remote(ego_car, lane_bounds, surroundings, dt, start_heading, vehicle.pose.heading, a)
+
+        return action_ref
+
+
+    @staticmethod
+    def get_action(vehicles, sensor_state, vehicle, action, dt):
+        """
+        Retrieve a safe action for the given vehicle. This controller atempts to ensure:
+            a) the action is safe
+            b) the action is as close to the original action as possible
+        """
+        # Process the action inputs
+        start_t = time.perf_counter()
+
+        throttle, brake, steering_angle = action
+        
+        throttle = np.clip(throttle, 0, 1)
+        brake = np.clip(brake, 0, 1)
+        steering_angle = np.clip(steering_angle, -1, 1)
+
+        a = throttle * vehicle.max_accel - brake * vehicle.max_brake
+        delta = steering_angle * np.pi/4
+
+        road_network = sensor_state.mission_planner._road_network
+
+        # Calculate safe actions
+        # 1. Calculate ego vehicle surrounding lanes list
+        front_bumper = vehicle.pose.position[:2]
+        current_lane = road_network.nearest_lane(front_bumper)
+        surrounding_lanes = current_lane.getEdge().getLanes()
+        
+        surrounding_lanes_sets = [{*lane.getIncoming(), lane} for lane in surrounding_lanes] # extend with road predecessors
+        all_surrounding_lanes_set = set.union(*surrounding_lanes_sets)
+
+        # 2. For each vehicle, work out which lanes they're in
+        vehicle_lanes = {v.vehicle_id: SafetyPureController.get_vehicle_lanes(v, road_network) for v in vehicles}
+        if DEBUG:
+            vehicle2 = [v for v in vehicles if v.vehicle_id[6] == "2"]
+            vehicle2_id = None if len(vehicle2) == 0 else vehicle2[0].vehicle_id
+            is_disjoint = None if len(vehicle2) == 0 else vehicle_lanes[vehicle2_id].isdisjoint(all_surrounding_lanes_set)
+
+        # filter out vehicles not in the surrounding lanes
+        vehicles = [v for v in vehicles if not vehicle_lanes[v.vehicle_id].isdisjoint(all_surrounding_lanes_set)]
+
+
+        # 3. Order vehicles based on distance along ego vehicle's road
+        lane_local_offsets = {v.vehicle_id: SafetyPureController.get_distance_into_lane(current_lane, v, road_network) for v in vehicles}
+        vehicles.sort(key = lambda v : lane_local_offsets[v.vehicle_id])
+
+        ego_pos = np.clip(road_network.offset_into_lane(current_lane, vehicle.pose.position[:2]), 0, current_lane.getLength())
+
+        # Calculate the starting point/angles for the current lane
+        start_point = road_network.world_coord_from_offset(current_lane, ego_pos)
+        start_vector = road_network.lane_vector_at_offset(current_lane, ego_pos)
+        start_heading = np.arctan2(start_vector[1], start_vector[0])
+
+
+        # 4. Generate the surroundings and convert to CarsimCar
+        surroundings = [[None, None] for i in range(len(surrounding_lanes))]
+        for v in vehicles:
+            for lane_num, surrounding_lane_set in enumerate(surrounding_lanes_sets):
+                if not vehicle_lanes[v.vehicle_id].isdisjoint(surrounding_lane_set):
+                    if lane_local_offsets[v.vehicle_id] < ego_pos:
+                        # Car is in surrounding lane, and behind ego vehicle
+                        surroundings[lane_num][0] = CarsimCar(v, start_point, start_heading)
+                    else:
+                        # Car is in surrounding lane, and ahead of ego vehicle
+                        if surroundings[lane_num][1] is None:
+                            surroundings[lane_num][1] = CarsimCar(v, start_point, start_heading)
+        ego_car = CarsimCar(vehicle.state, start_point, start_heading)
+
+
+        # 5. Work out the lane boundaries
+        lane_bounds = []
+        bound = 0
+        centre = None
+        for lane in surrounding_lanes:
+            width = lane.getWidth()
+            lane_bounds.append((bound, bound+width))
+            if lane == current_lane:
+                centre = bound + width / 2
+            bound += width
+
+        if centre is None:
+            raise ValueError("Current lane is not in the surrounding lanes")
+
+        for i, lb in enumerate(lane_bounds):
+            lane_bounds[i] = (lb[0] - centre, lb[1] - centre)
+
+        start_t = time.perf_counter()
+
+        # 6. Pass through to our safety checker, finding an action which is hopefully close to the original intention,
         #    but definitely is safe.
         ego_car.a = a
         deltas = carsim.logic.get_safe_deltas(ego_car, lane_bounds, surroundings, dt)
+
 
         if DEBUG:
             changed = False
