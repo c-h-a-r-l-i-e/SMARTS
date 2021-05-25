@@ -195,6 +195,7 @@ class SafetyPureController:
         lane_bounds = reqs.lane_bounds
         surroundings = reqs.surroundings
         dt = reqs.dt
+        heading = reqs.heading
         start_heading = reqs.start_heading
         delta = reqs.delta
         a = ego_car.a
