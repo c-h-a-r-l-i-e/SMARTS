@@ -106,7 +106,6 @@ class PureLaneFollowingController:
         sim,
         agent_id,
         vehicle,
-        controller_state,
         sensor_state,
         dt,
         target_speed=12.5,
