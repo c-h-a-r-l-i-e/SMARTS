@@ -725,6 +725,7 @@ class SMARTS:
             if agent_controls_vehicles(agent_id)
                and matches_provider_action_spaces(agent_id, self._dynamic_action_spaces)
         }
+        
         accumulated_provider_state.merge(self._pybullet_provider_step(pybullet_actions))
 
         # Pure Physics
@@ -872,36 +873,37 @@ class SMARTS:
 
 
     def _perform_safety_agent_actions(self, agent_actions):
-        vehicles = []
-        vehicle_actions = []
-        sensor_states = []
-        action_spaces = []
-        
-        for agent_id, action in agent_actions.items():
-            agent_vehicles = self._vehicle_index.vehicles_by_actor_id(agent_id)
-            if len(agent_vehicles) == 0:
-                self._log.warning(
-                    f"{agent_id} doesn't have a vehicle, is the agent done? (dropping action)"
-                )
-            else:
-                agent_interface = self._agent_manager.agent_interface_for_agent_id(
-                    agent_id
-                )
-                is_boid_agent = self._agent_manager.is_boid_agent(agent_id)
+        if len(agent_actions) > 0:
+            vehicles = []
+            vehicle_actions = []
+            sensor_states = []
+            action_spaces = []
+            
+            for agent_id, action in agent_actions.items():
+                agent_vehicles = self._vehicle_index.vehicles_by_actor_id(agent_id)
+                if len(agent_vehicles) == 0:
+                    self._log.warning(
+                        f"{agent_id} doesn't have a vehicle, is the agent done? (dropping action)"
+                    )
+                else:
+                    agent_interface = self._agent_manager.agent_interface_for_agent_id(
+                        agent_id
+                    )
+                    is_boid_agent = self._agent_manager.is_boid_agent(agent_id)
 
-                for vehicle in agent_vehicles:
-                    vehicles.append(vehicle)
-                    vehicle_actions.append(action[vehicle.id] if is_boid_agent else action)
-                    sensor_states.append(self._vehicle_index.sensor_state_for_vehicle_id(vehicle.id))
-                    action_spaces.append(agent_interface.action_space)
+                    for vehicle in agent_vehicles:
+                        vehicles.append(vehicle)
+                        vehicle_actions.append(action[vehicle.id] if is_boid_agent else action)
+                        sensor_states.append(self._vehicle_index.sensor_state_for_vehicle_id(vehicle.id))
+                        action_spaces.append(agent_interface.action_space)
 
-        Controllers.perform_safe_actions(
-            self,
-            vehicles,
-            vehicle_actions,
-            sensor_states,
-            action_spaces,
-        )
+            Controllers.perform_safe_actions(
+                self,
+                vehicles,
+                vehicle_actions,
+                sensor_states,
+                action_spaces,
+            )
 
 
     def _sync_vehicles_to_renderer(self):

@@ -49,6 +49,8 @@ from smarts.core.controllers.safety_controller import (
     SafetyPureLaneFollowingController,
 )
 
+
+
 METER_PER_SECOND_TO_KM_PER_HR = 3.6
 
 
@@ -124,8 +126,8 @@ class Controllers:
                 )
 
         # Perform action across multiple cores
-        pool = mp.Pool(mp.cpu_count())
-        safe_actions = pool.map(SafetyPureController.get_safe_action, args)
+        with mp.Pool(mp.cpu_count()) as pool:
+            safe_actions = pool.map(SafetyPureController.get_safe_action, args)
 
         for i in range(len(vehicles)):
             vehicle = vehicles[i]
