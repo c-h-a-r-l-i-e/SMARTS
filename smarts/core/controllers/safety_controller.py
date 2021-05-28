@@ -28,12 +28,8 @@ from smarts.core.controllers.pure_controller import (
 )
 
 import carsim.logic
-import carsim.plot
-
 import sympy as sym
 from sympy import S
-
-import matplotlib.pyplot as plt
 
 import time
 
@@ -44,6 +40,8 @@ if DEBUG:
     fig, (ax0, ax1) = plt.subplots(2)
     ax0.set_aspect("equal")
     ax1.set_aspect("equal")
+    import matplotlib.pyplot as plt
+    import carsim.plot
 
 #TODO: create new safety provider which will first gather actions, and then perform them!
 
@@ -103,6 +101,11 @@ class SafeDeltaRequirements:
         self.start_heading = start_heading
         self.heading = heading
         self.delta = delta
+
+
+@ray.remote
+def get_safe_action(reqs):
+    return SafetyPureController.get_safe_action(reqs)
 
 
 class SafetyPureController:
