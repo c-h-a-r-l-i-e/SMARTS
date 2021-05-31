@@ -125,8 +125,12 @@ class Controllers:
                     "inside controller"
                 )
 
-        result_ids = [get_safe_action.options(placement_group=False).remote(arg) for arg in args]
-        safe_actions = ray.get(result_ids)
+        remote = False
+        if remote:
+            result_ids = [get_safe_action.options(placement_group=False).remote(arg) for arg in args]
+            safe_actions = ray.get(result_ids)
+        else:
+            safe_actions = [SafetyPureController.get_safe_action(arg) for arg in args]
 
 
 

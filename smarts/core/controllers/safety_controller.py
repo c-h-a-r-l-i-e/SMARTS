@@ -28,6 +28,7 @@ from smarts.core.controllers.pure_controller import (
 )
 
 import carsim.logic
+import carsim.efficientlogic
 import sympy as sym
 from sympy import S
 
@@ -37,11 +38,11 @@ import ray
 
 DEBUG = False
 if DEBUG:
+    import matplotlib.pyplot as plt
+    import carsim.plot
     fig, (ax0, ax1) = plt.subplots(2)
     ax0.set_aspect("equal")
     ax1.set_aspect("equal")
-    import matplotlib.pyplot as plt
-    import carsim.plot
 
 #TODO: create new safety provider which will first gather actions, and then perform them!
 
@@ -93,7 +94,7 @@ class SafeDeltaRequirements:
     """
     This class contains the objects required for calculating safe actions for a vehicle
     """
-    def __init__(self, ego_car, lane_bounds, surroundings, dt, start_heading, heading, delta):
+    def __init__(self, ego_car, lane_bounds, surroundings, dt, start_heading, heading, delta, vehicle_id):
         self.ego_car = ego_car
         self.lane_bounds = lane_bounds
         self.surroundings = surroundings
@@ -101,6 +102,7 @@ class SafeDeltaRequirements:
         self.start_heading = start_heading
         self.heading = heading
         self.delta = delta
+        self.vehicle_id = vehicle_id
 
 
 @ray.remote
@@ -139,7 +141,6 @@ class SafetyPureController:
 
         # filter out vehicles not in the surrounding lanes
         vehicles = [v for v in vehicles if not vehicle_lanes[v.vehicle_id].isdisjoint(all_surrounding_lanes_set)]
-
 
         # 3. Order vehicles based on distance along ego vehicle's road
         lane_local_offsets = {v.vehicle_id: SafetyPureController.get_distance_into_lane(current_lane, v, road_network) for v in vehicles}
@@ -188,7 +189,7 @@ class SafetyPureController:
         start_t = time.perf_counter()
         ego_car.a = a
 
-        reqs = SafeDeltaRequirements(ego_car, lane_bounds, surroundings, dt, start_heading, vehicle.pose.heading, delta)
+        reqs = SafeDeltaRequirements(ego_car, lane_bounds, surroundings, dt, start_heading, vehicle.pose.heading, delta, vehicle.id)
 
         return reqs
 
@@ -201,36 +202,68 @@ class SafetyPureController:
         heading = reqs.heading
         start_heading = reqs.start_heading
         delta = reqs.delta
+        vehicle_id = reqs.vehicle_id
         a = ego_car.a
-        deltas = carsim.logic.get_safe_deltas(ego_car, lane_bounds, surroundings, dt)
 
-        # Check if deltas empty
-        if deltas == S.EmptySet:
-            a = - ego_car.brake_max
-            ego_car.a = a
+        use_efficient = True
+        if use_efficient:
+            # use the efficient module to get a ndarray of safe deltas
+            deltas = carsim.efficientlogic.get_safe_deltas(ego_car, lane_bounds, surroundings, dt)
+
+            if len(deltas) == 0:
+                a = ego_car.brake_max
+                ego_car.a = a
+                deltas = carsim.efficientlogic.get_safe_deltas(ego_car, lane_bounds, surroundings, dt)
+                if len(deltas) == 0:
+                    # There's no safe delta while max braking, so steer towards lane centre.
+                    print("no safe deltas")
+                    delta =  heading - start_heading + np.pi/2
+
+            if len(deltas != 0):
+                delta = deltas[np.argmin(np.abs(deltas - delta))]
+                # print("picked safe delta = {}, a = {}".format(delta, a))
+
+            if DEBUG:
+                if vehicle_id[6] == "2":
+                    ax0.clear()
+                    carsim.plot.plot_surroundings_and_deltas(ego_car, surroundings, lane_bounds, dt, deltas, ax0)
+                if vehicle_id[6] == "3":
+                    ax1.clear()
+                    carsim.plot.plot_surroundings_and_deltas(ego_car, surroundings, lane_bounds, dt, deltas, ax1)
+                    plt.pause(0.01)
+
+        else:
             deltas = carsim.logic.get_safe_deltas(ego_car, lane_bounds, surroundings, dt)
 
+            # Check if deltas empty
             if deltas == S.EmptySet:
-                # There's no safe delta while max braking, so steer towards lane centre.
-                delta =  -start_heading + heading + np.pi/2
-            
-        if deltas != S.EmptySet and not deltas.contains(delta):
-            # Action is deemed unsafe, so find the closest possible delta, by extracting the boundary of 
-            # the delta set, and picking the closest boundary
-            boundary = deltas.boundary
-            new_delta = float(min(boundary.args, key=lambda d : abs(d-delta)))
-            safety_thresh = 0.05
-            if new_delta > delta:
-                delta = new_delta + safety_thresh
-            else:
-                delta = new_delta - safety_thresh
+                a = - ego_car.brake_max
+                ego_car.a = a
+                deltas = carsim.logic.get_safe_deltas(ego_car, lane_bounds, surroundings, dt)
+
+                if deltas == S.EmptySet:
+                    # There's no safe delta while max braking, so steer towards lane centre.
+                    delta =  -start_heading + heading + np.pi/2
+                
+            if deltas != S.EmptySet and not deltas.contains(delta):
+                # Action is deemed unsafe, so find the closest possible delta, by extracting the boundary of 
+                # the delta set, and picking the closest boundary
+                boundary = deltas.boundary
+                new_delta = float(min(boundary.args, key=lambda d : abs(d-delta)))
+                safety_thresh = 0.05
+                if new_delta > delta:
+                    delta = new_delta + safety_thresh
+                else:
+                    delta = new_delta - safety_thresh
 
         if a > 0:
             brake = 0
             throttle = a / ego_car.a_max
         else:
-            brake = - a / ego_car.brake_max
+            brake = a / ego_car.brake_max
             throttle = 0
+
+        # TODO: check braking is consistent!!!
 
         steering_angle = delta / (np.pi/4) 
 
