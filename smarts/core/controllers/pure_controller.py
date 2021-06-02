@@ -41,7 +41,7 @@ class PureController:
         brake = np.clip(brake, 0, 1)
         steering_angle = np.clip(steering_angle, -1, 1)
 
-        a = throttle * vehicle.max_accel - brake * vehicle.max_brake
+        a = throttle * vehicle.max_accel + brake * vehicle.max_brake
         delta = steering_angle * np.pi/4
 
         # These coordinates and heading are of the centre of the car, and theta is in radians,
@@ -69,7 +69,7 @@ class PureController:
 
         else:
             # These equations are the integrals of the kinematic equations for a 
-            # Ackermann steering geometry
+            # bicycle steering geometry
             x += l / np.tan(delta) * np.sin(a * np.tan(delta) * (dt**2) / (2 * l) + \
                     np.tan(delta) * dt * v / l) * np.cos(theta) \
                 + l / np.tan(delta) * np.cos(a * np.tan(delta) * (dt**2) / (2 * l) + \
@@ -92,7 +92,6 @@ class PureController:
         x += l/2 * np.cos(theta)
         y += l/2 * np.sin(theta)
         heading = theta - np.pi/2
-
 
         pose = Pose.from_center([x, y], Heading(heading))
         vehicle.control(pose, v)
@@ -166,7 +165,7 @@ class PureLaneFollowingController:
             brake = 0
             throttle = accel / vehicle.max_accel
         else:
-            brake = - accel / vehicle.max_brake
+            brake = accel / vehicle.max_brake
             throttle = 0
 
         action = (throttle, brake, steering_angle)

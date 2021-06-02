@@ -63,7 +63,7 @@ class VehicleState:
     linear_velocity: numpy.ndarray = None
     angular_velocity: numpy.ndarray = None
     max_accel: float = 6
-    max_brake: float = 6
+    max_brake: float = -6
 
 
 @dataclass(frozen=True)
@@ -152,7 +152,7 @@ class Vehicle:
         self._speed = None
 
         self._max_accel = 6
-        self._max_brake = 6
+        self._max_brake = -6
 
         self._meta_create_sensor_functions()
         self._sensors = {}
