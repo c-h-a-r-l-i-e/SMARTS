@@ -12,6 +12,7 @@ class Lane:
 
     def get_vehicle_position(self, veh_state):
         position = veh_state.pose.position[:2]
+
         u, v = self.road_network.world_to_lane_coord(self.sumo_lane, position)
 
         lane_vector = self.road_network.lane_vector_at_offset(self.sumo_lane, u)

@@ -45,6 +45,7 @@ from .agent_manager import AgentManager
 from .bubble_manager import BubbleManager
 from .colors import SceneColors
 from .controllers import ActionSpaceType, Controllers
+from .controllers.safety_network import SafetyRoadNetwork
 from .motion_planner_provider import MotionPlannerProvider
 from .provider import Provider, ProviderState
 from .renderer import Renderer
@@ -125,6 +126,7 @@ class SMARTS:
             ActionSpaceType.SafetyPureContinuous,
             ActionSpaceType.SafetyPureLane,
         }
+        self._safety_network = None
 
         # Set up indices
         self._agent_manager = AgentManager(agent_interfaces, zoo_addrs)
@@ -897,12 +899,16 @@ class SMARTS:
                         sensor_states.append(self._vehicle_index.sensor_state_for_vehicle_id(vehicle.id))
                         action_spaces.append(agent_interface.action_space)
 
+            if self._safety_network is None:
+                self._safety_network = SafetyRoadNetwork(self.road_network)
+
             Controllers.perform_safe_actions(
                 self,
                 vehicles,
                 vehicle_actions,
                 sensor_states,
                 action_spaces,
+                self._safety_network,
             )
 
 

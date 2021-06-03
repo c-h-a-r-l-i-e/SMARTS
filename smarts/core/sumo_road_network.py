@@ -351,10 +351,12 @@ class SumoRoadNetwork:
         lane_length = lane.getLength()
 
         if end_offset > lane_length + add_offset:
-            raise ValueError(
-                f"Offset={end_offset} goes out further than the end of "
-                f"lane=({lane.getID()}, length={lane_length})"
-            )
+            start_offfset = lane_length
+            end_offset = lane_length + add_offset
+            # raise ValueError(
+            #     f"Offset={end_offset} goes out further than the end of "
+            #     f"lane=({lane.getID()}, length={lane_length})"
+            # )
 
         p1 = self.world_coord_from_offset(lane, start_offset)
         p2 = self.world_coord_from_offset(lane, end_offset)
