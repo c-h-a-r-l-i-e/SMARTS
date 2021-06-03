@@ -78,6 +78,7 @@ class Controllers:
         actions,
         sensor_states,
         action_spaces,
+        safety_network,
     ):
         """
         Seperate method needed for safe actions, as we must collect the safe actions first,
@@ -97,7 +98,7 @@ class Controllers:
                     sim=sim,
                     vehicle=vehicle,
                     sensor_state=sensor_state,
-                    dt = sim.timestep_sec,
+                    dt = sim.timestep_sec
                 )
 
                 # 12.5 m/s (45 km/h) is used as the nominal speed for lane change.
@@ -117,7 +118,8 @@ class Controllers:
                 #    other_veh_states, sensor_state, vehicle, action, sim.timestep_sec
                 #)
                 #args.append( (other_veh_states, sensor_state, vehicle, action, sim.timestep_sec) )
-                args.append( SafetyPureController.get_reqs(other_veh_states, sensor_state, vehicle, action, sim.timestep_sec)) 
+                args.append(SafetyPureController.get_reqs(other_veh_states, sensor_state, vehicle, action, sim.timestep_sec, 
+                             safety_network))
 
             else:
                 raise ValueError(
@@ -131,12 +133,6 @@ class Controllers:
             safe_actions = ray.get(result_ids)
         else:
             safe_actions = [SafetyPureController.get_safe_action(arg) for arg in args]
-
-
-
-        # Perform action across multiple cores
-        #with mp.Pool(processes=4) as pool:
-        #    safe_actions = pool.map(SafetyPureController.get_safe_action, args)
 
         for i in range(len(vehicles)):
             vehicle = vehicles[i]
