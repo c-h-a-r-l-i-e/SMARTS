@@ -44,8 +44,6 @@ if DEBUG:
     ax0.set_aspect("equal")
     ax1.set_aspect("equal")
 
-#TODO: create new safety provider which will first gather actions, and then perform them!
-
 class CarsimCar(carsim.logic.CarFuture):
     """
     An object which carsim.logic can take in order to calcualte safe actions
@@ -128,8 +126,8 @@ class SafetyPureController:
 
         # Calculate safe actions
         # 1. Calculate ego vehicle surrounding lanes list
-        front_bumper = vehicle.pose.position[:2]
-        current_lane = road_network.nearest_lane(front_bumper)
+        position = vehicle.pose.position[:2]
+        current_lane = safety_network.nearest_lane(position)
         surrounding_lanes = [l.getID() for l in current_lane.getEdge().getLanes()]
         
         # extend with road predecessors
@@ -177,6 +175,9 @@ class SafetyPureController:
                             surroundings[lane_num][1] = safety_network.get_carsim_car(v)
         ego_car = safety_network.get_carsim_car(vehicle.state)
 
+        #if len(surrounding_lanes) < 2:
+        #    delta = -(vehicle.pose.heading - start_heading + np.pi/2)
+
 
         # 5. Work out the lane boundaries
         #lane_bounds = []
@@ -204,8 +205,9 @@ class SafetyPureController:
             msg = None
             if len(surrounding_lanes) > 1:
                 if vehicle.id[6] == "2": # TODO: remove
+                    pass
                     #delta = -np.pi/4
-                    a = vehicle.state.max_brake # TODO: ensure that we don't crash when we brake straight away!
+                    #a = vehicle.state.max_brake # TODO: ensure that we don't crash when we brake straight away!
                 if vehicle.id[6] == "3":
                     pass
                     #delta = np.pi/4
@@ -257,6 +259,7 @@ class SafetyPureController:
                     carsim.plot.plot_surroundings_and_deltas(ego_car, surroundings, lane_bounds, dt, deltas, ax0)
                     ax1.text(0,0,"{}".format(reqs.debug_msg))
                 if vehicle_id[6] == "0":
+                    print
                     carsim.plot.plot_surroundings_and_deltas(ego_car, surroundings, lane_bounds, dt, deltas, ax1)
                     ax0.text(0,0,"{}".format(reqs.debug_msg))
                     plt.pause(0.01)
@@ -292,21 +295,11 @@ class SafetyPureController:
             brake = a / ego_car.brake_max
             throttle = 0
 
-        # TODO: check braking is consistent!!!
-
         steering_angle = delta / (np.pi/4) 
 
         action = (throttle, brake, steering_angle)
 
         return action
-
-
-    @staticmethod
-    def get_front_bumper(vehicle_state):
-        position = np.array(vehicle_state.pose.position[:2])
-        theta = vehicle_state.pose.heading + np.pi/2
-        position += np.array((np.cos(theta), np.sin(theta))) * vehicle_state.dimensions.length/2
-        return position
 
 
     @staticmethod

@@ -42,7 +42,6 @@ class LaneGroup:
         return [lane.sumo_lane.getID() for lane in self.lanes]
 
 
-
 class SafetyRoadNetwork:
     def __init__(self, road_network):
         self.road_network = road_network
@@ -88,9 +87,21 @@ class SafetyRoadNetwork:
         recurse(start_lane, 0, 0)
 
 
-    def get_carsim_car(self, vehicle_state, a=None):
-        lane = self.lanes[self.road_network.nearest_lane(vehicle_state.pose.position[:2], include_junctions=False).getID()]
+    def nearest_lane(self, position):
+        """
+        Find the nearest sumo lane, checking that lane is actually the nearest
+        """
+        lane = self.road_network.nearest_lane(position, include_junctions=True)
+        u = self.road_network.offset_into_lane(lane, position)
+        if u > lane.getLength():
+            outgoing = lane.getOutgoing()
+            if len(outgoing) > 0:
+                lane = outgoing[0].getToLane()
 
+        return lane
+
+    def get_carsim_car(self, vehicle_state, a=None):
+        lane = self.lanes[self.nearest_lane(vehicle_state.pose.position[:2]).getID()]
         x, y, theta = lane.get_vehicle_position(vehicle_state)
 
         return CarsimCar(vehicle_state, x, y, theta, a)
