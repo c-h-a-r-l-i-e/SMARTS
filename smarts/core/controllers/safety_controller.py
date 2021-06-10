@@ -126,7 +126,11 @@ class SafetyPureController:
 
         # Calculate safe actions
         # 1. Calculate ego vehicle surrounding lanes list
-        position = vehicle.pose.position[:2]
+        position = np.array(vehicle.pose.position[:2], copy=True)
+        # translate to front bumper
+        # TODO: fix this
+        theta = vehicle.pose.heading + np.pi/2
+        # position += np.array((np.cos(theta), np.sin(theta))) * vehicle.length/2
         current_lane = safety_network.nearest_lane(position)
         surrounding_lanes = [l.getID() for l in current_lane.getEdge().getLanes()]
         
@@ -175,8 +179,8 @@ class SafetyPureController:
                             surroundings[lane_num][1] = safety_network.get_carsim_car(v)
         ego_car = safety_network.get_carsim_car(vehicle.state)
 
-        #if len(surrounding_lanes) < 2:
-        #    delta = -(vehicle.pose.heading - start_heading + np.pi/2)
+        if len(surrounding_lanes) < 2:
+             delta = -(vehicle.pose.heading - start_heading + np.pi/2)
 
 
         # 5. Work out the lane boundaries
@@ -243,11 +247,11 @@ class SafetyPureController:
                 a = ego_car.brake_max
                 ego_car.a = a
                 deltas = carsim.efficientlogic.get_safe_deltas(ego_car, lane_bounds, surroundings, dt)
-                if len(deltas) == 0:
-                    # There's no safe delta while max braking, so steer towards lane centre.
-                    if DEBUG:
-                        print("no safe deltas")
-                    delta =  -(heading - start_heading + np.pi/2)
+                if DEBUG:
+                    if len(deltas) == 0:
+                        # There's no safe delta while max braking, so steer towards lane centre.
+                        print("no safe deltas for vehicle {}, aiming for a={}, delta={}".format(vehicle_id, a, delta))
+                        delta =  -(heading - start_heading + np.pi/2)
 
             if len(deltas != 0):
                 delta = deltas[np.argmin(np.abs(deltas - delta))]
