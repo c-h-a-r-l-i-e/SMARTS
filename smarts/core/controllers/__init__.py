@@ -119,7 +119,7 @@ class Controllers:
                 #)
                 #args.append( (other_veh_states, sensor_state, vehicle, action, sim.timestep_sec) )
                 args.append(SafetyPureController.get_reqs(other_veh_states, sensor_state, vehicle, action, sim.timestep_sec, 
-                             safety_network))
+                             safety_network, sim))
 
             else:
                 raise ValueError(

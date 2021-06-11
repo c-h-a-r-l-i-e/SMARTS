@@ -109,7 +109,7 @@ def get_safe_action(reqs):
 
 class SafetyPureController:
     @staticmethod
-    def get_reqs(vehicles, sensor_state, vehicle, action, dt, safety_network):
+    def get_reqs(vehicles, sensor_state, vehicle, action, dt, safety_network, sim):
         # Process the action inputs
         start_t = time.perf_counter()
 
@@ -130,7 +130,7 @@ class SafetyPureController:
         # translate to front bumper
         # TODO: fix this
         theta = vehicle.pose.heading + np.pi/2
-        # position += np.array((np.cos(theta), np.sin(theta))) * vehicle.length/2
+        #position += np.array((np.cos(theta), np.sin(theta))) * vehicle.length/2
         current_lane = safety_network.nearest_lane(position)
         surrounding_lanes = [l.getID() for l in current_lane.getEdge().getLanes()]
         
@@ -179,8 +179,9 @@ class SafetyPureController:
                             surroundings[lane_num][1] = safety_network.get_carsim_car(v)
         ego_car = safety_network.get_carsim_car(vehicle.state)
 
-        if len(surrounding_lanes) < 2:
-             delta = -(vehicle.pose.heading - start_heading + np.pi/2)
+        # This is a fix for weird behaviour in junctions TODO: generalize to different scenarios
+        if current_lane.getEdge().getID() != "gneE5":
+            delta = SafetyPureController.get_safe_steering_angle(sensor_state, vehicle, sim)
 
 
         # 5. Work out the lane boundaries
@@ -224,6 +225,47 @@ class SafetyPureController:
                     vehicle.pose.heading, delta, vehicle.id)
 
         return reqs
+
+    @staticmethod
+    def get_safe_steering_angle(sensor_state, vehicle, sim):
+        wp_paths = sensor_state.mission_planner.waypoint_paths_at(
+            sim, vehicle.pose, lookahead=16
+        )
+
+        current_lane = PureLaneFollowingController.find_current_lane(
+            wp_paths, vehicle.position
+        )
+
+        wp_path = wp_paths[np.clip(current_lane, 0, len(wp_paths) - 1)]
+
+        if len(wp_path) > 1:
+            # Look ahead 5 positions along the waypoints and take a weighted average
+            # of their poses
+            x = y = count = 0
+            mult = 1
+            lookahead = 5
+            for i in range(lookahead + 1):
+                if i < len(wp_path):
+                    x += wp_path[i].pos[0] * mult
+                    y += wp_path[i].pos[1] * mult
+                    count += mult
+                    mult /= 1.5
+            x /= count
+            y /= count
+
+            veh_pos = vehicle.pose.position
+            dy = y - veh_pos[1]
+            dx = x - veh_pos[0]
+
+            heading = np.arctan(dy / dx) - np.pi/2
+
+        else:
+            heading = vehicle.pose.heading
+
+        heading_diff =  heading - vehicle.pose.heading
+        steering_angle = np.clip(heading_diff / (np.pi/4), -1, 1) # Currently restrict this to avoid over-steering
+        return steering_angle
+
 
     @staticmethod
     def get_safe_action(reqs):
