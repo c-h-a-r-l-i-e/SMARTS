@@ -214,21 +214,21 @@ class FrameStack(Wrapper):
             # if the mean ttc or mean speed or mean dist is higher than before, get penalty
             # otherwise, get bonus
             last_env_obs = env_obs_seq[-1]
-            # neighbor_features_np = np.asarray([e.get("neighbor") for e in obs_seq])
-            # if neighbor_features_np is not None:
-            #     new_neighbor_feature_np = neighbor_features_np[-1].reshape((-1, 5))
-            #     mean_dist = np.mean(new_neighbor_feature_np[:, 0])
-            #     mean_ttc = np.mean(new_neighbor_feature_np[:, 2])
+             neighbor_features_np = np.asarray([e.get("neighbor") for e in obs_seq])
+             if neighbor_features_np is not None:
+                 new_neighbor_feature_np = neighbor_features_np[-1].reshape((-1, 5))
+                 mean_dist = np.mean(new_neighbor_feature_np[:, 0])
+                 mean_ttc = np.mean(new_neighbor_feature_np[:, 2])
 
-            #     last_neighbor_feature_np = neighbor_features_np[-2].reshape((-1, 5))
-            #     mean_dist2 = np.mean(last_neighbor_feature_np[:, 0])
-            #     # mean_speed2 = np.mean(last_neighbor_feature[:, 1])
-            #     mean_ttc2 = np.mean(last_neighbor_feature_np[:, 2])
-            #     penalty += (
-            #         0.03 * (mean_dist - mean_dist2)
-            #         # - 0.01 * (mean_speed - mean_speed2)
-            #         + 0.01 * (mean_ttc - mean_ttc2)
-            #     )
+                 last_neighbor_feature_np = neighbor_features_np[-2].reshape((-1, 5))
+                 mean_dist2 = np.mean(last_neighbor_feature_np[:, 0])
+                 # mean_speed2 = np.mean(last_neighbor_feature[:, 1])
+                 mean_ttc2 = np.mean(last_neighbor_feature_np[:, 2])
+                 penalty += (
+                     0.03 * (mean_dist - mean_dist2)
+                     # - 0.01 * (mean_speed - mean_speed2)
+                     + 0.01 * (mean_ttc - mean_ttc2)
+                 )
 
             # ======== Penalty: distance to goal ========= (2)
             goal = last_env_obs.ego_vehicle_state.mission.goal
