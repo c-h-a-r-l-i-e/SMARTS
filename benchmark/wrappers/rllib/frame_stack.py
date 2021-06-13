@@ -210,7 +210,7 @@ class FrameStack(Wrapper):
             penalty, bonus = 0.0, 0.0
             obs_seq = observation_adapter(env_obs_seq)
 
-            # ======== Penalty: too close to neighbor vehicles
+            # ======== Penalty: too close to neighbor vehicles (1)
             # if the mean ttc or mean speed or mean dist is higher than before, get penalty
             # otherwise, get bonus
             # last_env_obs = env_obs_seq[-1]
@@ -230,7 +230,7 @@ class FrameStack(Wrapper):
             #         + 0.01 * (mean_ttc - mean_ttc2)
             #     )
 
-            # ======== Penalty: distance to goal =========
+            # ======== Penalty: distance to goal ========= (2)
             # goal = last_env_obs.ego_vehicle_state.mission.goal
             # ego_2d_position = last_env_obs.ego_vehicle_state.position[:2]
             # if hasattr(goal, "position"):
@@ -250,7 +250,7 @@ class FrameStack(Wrapper):
             # old_goal_dist = distance.euclidean(old_ego_2d_position, old_goal_position)
             # penalty += 0.1 * (old_goal_dist - goal_dist)  # 0.05
 
-            # ======== Penalty: distance to the center
+            # ======== Penalty: distance to the center (3)
             # distance_to_center_np = np.asarray(
             #     [e["distance_to_center"] for e in obs_seq]
             # )
@@ -259,7 +259,7 @@ class FrameStack(Wrapper):
             # )
             # penalty += 0.01 * diff_dist_to_center_penalty[0]
 
-            # ======== Penalty & Bonus: event (collision, off_road, reached_goal, reached_max_episode_steps)
+            # ======== Penalty & Bonus: event (collision, off_road, reached_goal, reached_max_episode_steps) (4)
             ego_events = last_env_obs.events
             # ::collision
             penalty += -50.0 if len(ego_events.collisions) > 0 else 0.0
@@ -269,13 +269,13 @@ class FrameStack(Wrapper):
             if ego_events.reached_goal:
                 bonus += 20.0
 
-            # ::reached max_episode_step
-            if ego_events.reached_max_episode_steps:
-                penalty += -0.5
-            else:
-                bonus += 0.5
+            # ::reached max_episode_step (5)
+            # if ego_events.reached_max_episode_steps:
+            #     penalty += -0.5
+            # else:
+            #     bonus += 0.5
 
-            # ======== Penalty: heading error penalty
+            # ======== Penalty: heading error penalty (6)
             # if obs.get("heading_errors", None):
             #     heading_errors = obs["heading_errors"][-1]
             #     penalty_heading_errors = -0.03 * heading_errors[:2]
@@ -284,24 +284,24 @@ class FrameStack(Wrapper):
             #     penalty_heading_errors += -0.01 * (heading_errors[:2] - heading_errors2[:2])
             #     penalty += np.mean(penalty_heading_errors)
 
-            # ======== Penalty: penalise sharp turns done at high speeds =======
-            if last_env_obs.ego_vehicle_state.speed > 60:
-                steering_penalty = -pow(
-                    (last_env_obs.ego_vehicle_state.speed - 60)
-                    / 20
-                    * last_env_obs.ego_vehicle_state.steering
-                    / 4,
-                    2,
-                )
-            else:
-                steering_penalty = 0
-            penalty += 0.1 * steering_penalty
+            # ======== Penalty: penalise sharp turns done at high speeds ======= (7)
+            #if last_env_obs.ego_vehicle_state.speed > 60:
+            #    steering_penalty = -pow(
+            #        (last_env_obs.ego_vehicle_state.speed - 60)
+            #        / 20
+            #        * last_env_obs.ego_vehicle_state.steering
+            #        / 4,
+            #        2,
+            #    )
+            #else:
+            #    steering_penalty = 0
+            #penalty += 0.1 * steering_penalty
 
-            # ========= Bonus: environment reward (distance travelled) ==========
-            bonus += 0.05 * env_reward
+            # ========= Bonus: environment reward (distance travelled) ========== (8)
+            #bonus += 0.05 * env_reward
             return bonus + penalty
 
-        def new_func(env_obs_seq, env_reward):
+        def old_func(env_obs_seq, env_reward):
             penalty, bonus = 0.0, 0.0
             obs_seq = observation_adapter(env_obs_seq)
 
@@ -365,35 +365,35 @@ class FrameStack(Wrapper):
                 bonus += 20.0
 
             # ::reached max_episode_step
-            # if ego_events.reached_max_episode_steps:
-            #     penalty += -0.5
-            # else:
-            #     bonus += 0.5
+            if ego_events.reached_max_episode_steps:
+                penalty += -0.5
+            else:
+                bonus += 0.5
 
             # ======== Penalty: heading error penalty
-            # if obs.get("heading_errors", None):
-            #     heading_errors = obs["heading_errors"][-1]
-            #     penalty_heading_errors = -0.03 * heading_errors[:2]
-            #
-            #     heading_errors2 = obs["heading_errors"][-2]
-            #     penalty_heading_errors += -0.01 * (heading_errors[:2] - heading_errors2[:2])
-            #     penalty += np.mean(penalty_heading_errors)
+            if obs.get("heading_errors", None):
+                heading_errors = obs["heading_errors"][-1]
+                penalty_heading_errors = -0.03 * heading_errors[:2]
+            
+                heading_errors2 = obs["heading_errors"][-2]
+                penalty_heading_errors += -0.01 * (heading_errors[:2] - heading_errors2[:2])
+                penalty += np.mean(penalty_heading_errors)
 
             # ======== Penalty: penalise sharp turns done at high speeds =======
-            # if last_env_obs.ego_vehicle_state.speed > 60:
-            #     steering_penalty = -pow(
-            #         (last_env_obs.ego_vehicle_state.speed - 60)
-            #         / 20
-            #         * last_env_obs.ego_vehicle_state.steering
-            #         / 4,
-            #         2,
-            #     )
-            # else:
-            #     steering_penalty = 0
-            # penalty += 0.1 * steering_penalty
+            if last_env_obs.ego_vehicle_state.speed > 60:
+                steering_penalty = -pow(
+                    (last_env_obs.ego_vehicle_state.speed - 60)
+                    / 20
+                    * last_env_obs.ego_vehicle_state.steering
+                    / 4,
+                    2,
+                )
+            else:
+                steering_penalty = 0
+            penalty += 0.1 * steering_penalty
 
             # ========= Bonus: environment reward (distance travelled) ==========
-            # bonus += 0.05 * env_reward
+            bonus += 0.05 * env_reward
             return bonus + penalty
 
-        return new_func
+        return func
