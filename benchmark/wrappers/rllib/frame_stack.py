@@ -298,7 +298,7 @@ class FrameStack(Wrapper):
             #penalty += 0.1 * steering_penalty
 
             # ========= Bonus: environment reward (distance travelled) ========== (8)
-            #bonus += 0.05 * env_reward
+            bonus += 0.5 * env_reward # 0.05
             return bonus + penalty
 
         def old_func(env_obs_seq, env_reward):
