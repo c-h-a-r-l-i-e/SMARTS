@@ -213,7 +213,7 @@ class FrameStack(Wrapper):
             # ======== Penalty: too close to neighbor vehicles (1)
             # if the mean ttc or mean speed or mean dist is higher than before, get penalty
             # otherwise, get bonus
-            # last_env_obs = env_obs_seq[-1]
+            last_env_obs = env_obs_seq[-1]
             # neighbor_features_np = np.asarray([e.get("neighbor") for e in obs_seq])
             # if neighbor_features_np is not None:
             #     new_neighbor_feature_np = neighbor_features_np[-1].reshape((-1, 5))
