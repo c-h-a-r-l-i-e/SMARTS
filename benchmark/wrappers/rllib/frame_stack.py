@@ -267,7 +267,7 @@ class FrameStack(Wrapper):
             penalty += -50.0 if ego_events.off_road else 0.0
             # ::reach goal
             if ego_events.reached_goal:
-                bonus += 20.0
+                bonus += 200.0
 
             # ::reached max_episode_step (5)
             # if ego_events.reached_max_episode_steps:
