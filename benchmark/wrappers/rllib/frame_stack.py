@@ -231,14 +231,14 @@ class FrameStack(Wrapper):
             #     )
 
             # ======== Penalty: distance to goal ========= (2)
-            # goal = last_env_obs.ego_vehicle_state.mission.goal
-            # ego_2d_position = last_env_obs.ego_vehicle_state.position[:2]
-            # if hasattr(goal, "position"):
-            #     goal_position = goal.position
-            # else:
-            #     goal_position = ego_2d_position
-            # goal_dist = distance.euclidean(ego_2d_position, goal_position)
-            # penalty += -0.01 * goal_dist
+            goal = last_env_obs.ego_vehicle_state.mission.goal
+            ego_2d_position = last_env_obs.ego_vehicle_state.position[:2]
+            if hasattr(goal, "position"):
+                goal_position = goal.position
+            else:
+                goal_position = ego_2d_position
+            goal_dist = distance.euclidean(ego_2d_position, goal_position)
+            penalty += -0.01 * goal_dist
 
             # old_obs = env_obs_seq[-2]
             # old_goal = old_obs.ego_vehicle_state.mission.goal
@@ -298,7 +298,7 @@ class FrameStack(Wrapper):
             #penalty += 0.1 * steering_penalty
 
             # ========= Bonus: environment reward (distance travelled) ========== (8)
-            bonus += 0.5 * env_reward # 0.05
+            # bonus += 0.5 * env_reward # 0.05
             return bonus + penalty
 
         def old_func(env_obs_seq, env_reward):
