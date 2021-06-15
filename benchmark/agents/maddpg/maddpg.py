@@ -87,7 +87,7 @@ DEFAULT_CONFIG = with_common_config({
     "training_intensity": None,
     # Force lockstep replay mode for MADDPG.
     "multiagent": merge_dicts(COMMON_CONFIG["multiagent"], {
-        "replay_mode": "lockstep"  # "independent",  # replay mode has two options, they are lockstep and independent, for smarts, it must be independent
+        "replay_mode": "independent" #"lockstep"  # "independent",  # replay mode has two options, they are lockstep and independent, for smarts, it must be independent
     }),
 
     # === Optimization ===
