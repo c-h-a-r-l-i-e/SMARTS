@@ -35,7 +35,7 @@ run:
   resume: False
   export_formats: [model, checkpoint]
   stop:
-    time_total_s: 21600
+    training_iteration: 100
   config:
     log_level: ERROR
     num_workers: 1
