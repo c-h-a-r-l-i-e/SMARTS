@@ -240,6 +240,7 @@ class FrameStack(Wrapper):
             goal_dist = distance.euclidean(ego_2d_position, goal_position)
             penalty += -0.01 * goal_dist
 
+            # ========== change in distance --> reward ==== (2 pt 2)
             old_obs = env_obs_seq[-2]
             old_goal = old_obs.ego_vehicle_state.mission.goal
             old_ego_2d_position = old_obs.ego_vehicle_state.position[:2]
@@ -248,7 +249,7 @@ class FrameStack(Wrapper):
             else:
                 old_goal_position = old_ego_2d_position
             old_goal_dist = distance.euclidean(old_ego_2d_position, old_goal_position)
-            penalty += 0.1 * (old_goal_dist - goal_dist)  # 0.05
+            penalty += 0.01 * (old_goal_dist - goal_dist)  # 0.1 (0.05 before that)
 
             # ======== Penalty: distance to the center (3)
             # distance_to_center_np = np.asarray(
