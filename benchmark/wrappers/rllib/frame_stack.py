@@ -214,21 +214,21 @@ class FrameStack(Wrapper):
             # if the mean ttc or mean speed or mean dist is higher than before, get penalty
             # otherwise, get bonus
             last_env_obs = env_obs_seq[-1]
-            neighbor_features_np = np.asarray([e.get("neighbor") for e in obs_seq])
-            if neighbor_features_np is not None:
-                new_neighbor_feature_np = neighbor_features_np[-1].reshape((-1, 5))
-                mean_dist = np.mean(new_neighbor_feature_np[:, 0])
-                mean_ttc = np.mean(new_neighbor_feature_np[:, 2])
+            # neighbor_features_np = np.asarray([e.get("neighbor") for e in obs_seq])
+            # if neighbor_features_np is not None:
+            #     new_neighbor_feature_np = neighbor_features_np[-1].reshape((-1, 5))
+            #     mean_dist = np.mean(new_neighbor_feature_np[:, 0])
+            #     mean_ttc = np.mean(new_neighbor_feature_np[:, 2])
 
-                last_neighbor_feature_np = neighbor_features_np[-2].reshape((-1, 5))
-                mean_dist2 = np.mean(last_neighbor_feature_np[:, 0])
-                # mean_speed2 = np.mean(last_neighbor_feature[:, 1])
-                mean_ttc2 = np.mean(last_neighbor_feature_np[:, 2])
-                penalty += (
-                    0.03 * (mean_dist - mean_dist2)
-                    # - 0.01 * (mean_speed - mean_speed2)
-                    + 0.01 * (mean_ttc - mean_ttc2)
-                )
+            #     last_neighbor_feature_np = neighbor_features_np[-2].reshape((-1, 5))
+            #     mean_dist2 = np.mean(last_neighbor_feature_np[:, 0])
+            #     # mean_speed2 = np.mean(last_neighbor_feature[:, 1])
+            #     mean_ttc2 = np.mean(last_neighbor_feature_np[:, 2])
+            #     penalty += (
+            #         0.03 * (mean_dist - mean_dist2)
+            #         # - 0.01 * (mean_speed - mean_speed2)
+            #         + 0.01 * (mean_ttc - mean_ttc2)
+            #     )
 
             # ======== Penalty: distance to goal ========= (2)
             goal = last_env_obs.ego_vehicle_state.mission.goal
@@ -240,15 +240,15 @@ class FrameStack(Wrapper):
             goal_dist = distance.euclidean(ego_2d_position, goal_position)
             penalty += -0.01 * goal_dist
 
-            # old_obs = env_obs_seq[-2]
-            # old_goal = old_obs.ego_vehicle_state.mission.goal
-            # old_ego_2d_position = old_obs.ego_vehicle_state.position[:2]
-            # if hasattr(old_goal, "position"):
-            #     old_goal_position = old_goal.position
-            # else:
-            #     old_goal_position = old_ego_2d_position
-            # old_goal_dist = distance.euclidean(old_ego_2d_position, old_goal_position)
-            # penalty += 0.1 * (old_goal_dist - goal_dist)  # 0.05
+            old_obs = env_obs_seq[-2]
+            old_goal = old_obs.ego_vehicle_state.mission.goal
+            old_ego_2d_position = old_obs.ego_vehicle_state.position[:2]
+            if hasattr(old_goal, "position"):
+                old_goal_position = old_goal.position
+            else:
+                old_goal_position = old_ego_2d_position
+            old_goal_dist = distance.euclidean(old_ego_2d_position, old_goal_position)
+            penalty += 0.1 * (old_goal_dist - goal_dist)  # 0.05
 
             # ======== Penalty: distance to the center (3)
             # distance_to_center_np = np.asarray(
@@ -264,10 +264,10 @@ class FrameStack(Wrapper):
             # ::collision
             penalty += -300.0 if len(ego_events.collisions) > 0 else 0.0
             # ::off road
-            penalty += -20.0 if ego_events.off_road else 0.0
+            penalty += -200.0 if ego_events.off_road else 0.0
             # ::reach goal
             if ego_events.reached_goal:
-                bonus += 100.0
+                bonus += 120.0
 
             # ::reached max_episode_step (5)
             # if ego_events.reached_max_episode_steps:
