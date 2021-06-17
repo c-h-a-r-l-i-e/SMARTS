@@ -269,12 +269,12 @@ class FrameStack(Wrapper):
             
             ego_events = last_env_obs.events
             # ::collision
-            penalty += -50.0 if len(ego_events.collisions) > 0 else 0.0 # -300
+            penalty += -130.0 if len(ego_events.collisions) > 0 else 0.0 # -300
             # ::off road
-            penalty += -50.0 if ego_events.off_road else 0.0
+            penalty += -130.0 if ego_events.off_road else 0.0
             # ::reach goal
             if ego_events.reached_goal:
-                bonus += 40 # + 120
+                bonus += 120 # + 120
 
             # ::reached max_episode_step (5)
             # if ego_events.reached_max_episode_steps:
