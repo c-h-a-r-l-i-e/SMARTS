@@ -212,11 +212,11 @@ class FrameStack(Wrapper):
         def func(env_obs_seq, env_reward):
             penalty, bonus = 0.0, 0.0
             obs_seq = observation_adapter(env_obs_seq)
+            last_env_obs = env_obs_seq[-1]
 
             # ======== Penalty: too close to neighbor vehicles (1)
             # if the mean ttc or mean speed or mean dist is higher than before, get penalty
             # otherwise, get bonus
-            last_env_obs = env_obs_seq[-1]
             # neighbor_features_np = np.asarray([e.get("neighbor") for e in obs_seq])
             # if neighbor_features_np is not None:
             #     new_neighbor_feature_np = neighbor_features_np[-1].reshape((-1, 5))
@@ -252,7 +252,7 @@ class FrameStack(Wrapper):
             else:
                 old_goal_position = old_ego_2d_position
             old_goal_dist = distance.euclidean(old_ego_2d_position, old_goal_position)
-            goal_penalty += 0.01 * (old_goal_dist - goal_dist)  # 0.1 (0.05 before that)
+            goal_penalty += 0.05 * (old_goal_dist - goal_dist)  # 0.1 (0.05 before that)
             goal_penalty = min(goal_penalty, 0)
             penalty += goal_penalty
 
@@ -269,12 +269,12 @@ class FrameStack(Wrapper):
             
             ego_events = last_env_obs.events
             # ::collision
-            penalty += -300.0 if len(ego_events.collisions) > 0 else 0.0
+            penalty += -50.0 if len(ego_events.collisions) > 0 else 0.0 # -300
             # ::off road
-            penalty += -300.0 if ego_events.off_road else 0.0
+            penalty += -50.0 if ego_events.off_road else 0.0
             # ::reach goal
             if ego_events.reached_goal:
-                bonus += 120.0
+                bonus += 40 # + 120
 
             # ::reached max_episode_step (5)
             # if ego_events.reached_max_episode_steps:
@@ -404,4 +404,4 @@ class FrameStack(Wrapper):
             bonus += 0.05 * env_reward
             return bonus + penalty
 
-        return old_func
+        return func
