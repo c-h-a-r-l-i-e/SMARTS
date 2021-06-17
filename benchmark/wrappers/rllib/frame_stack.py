@@ -89,7 +89,10 @@ class FrameStack(Wrapper):
         self.info_adapter = config["info_adapter"]
         self.reward_adapter = config["reward_adapter"]
 
-        self.frames = dict.fromkeys(self._agent_keys, deque(maxlen=self.num_stack))
+        self.frames = {}
+        for key in self._agent_keys:
+            self.frames[key] = deque(maxlen=self.num_stack)
+
 
     @staticmethod
     def get_observation_space(observation_space, wrapper_config):
@@ -263,6 +266,7 @@ class FrameStack(Wrapper):
             # penalty += 0.01 * diff_dist_to_center_penalty[0]
 
             # ======== Penalty & Bonus: event (collision, off_road, reached_goal, reached_max_episode_steps) (4)
+            
             ego_events = last_env_obs.events
             # ::collision
             penalty += -300.0 if len(ego_events.collisions) > 0 else 0.0
@@ -302,6 +306,7 @@ class FrameStack(Wrapper):
 
             # ========= Bonus: environment reward (distance travelled) ========== (8)
             # bonus += 0.5 * env_reward # 0.05
+            # print("reward : {}".format(bonus + penalty))
             return bonus + penalty
 
         def old_func(env_obs_seq, env_reward):
