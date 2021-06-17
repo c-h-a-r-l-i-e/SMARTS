@@ -379,13 +379,13 @@ class FrameStack(Wrapper):
                 bonus += 0.5
 
             # ======== Penalty: heading error penalty
-            if obs.get("heading_errors", None):
-                heading_errors = obs["heading_errors"][-1]
-                penalty_heading_errors = -0.03 * heading_errors[:2]
-            
-                heading_errors2 = obs["heading_errors"][-2]
-                penalty_heading_errors += -0.01 * (heading_errors[:2] - heading_errors2[:2])
-                penalty += np.mean(penalty_heading_errors)
+            # if env_obs.get("heading_errors", None):
+            #     heading_errors = obs["heading_errors"][-1]
+            #     penalty_heading_errors = -0.03 * heading_errors[:2]
+            # 
+            #     heading_errors2 = obs["heading_errors"][-2]
+            #     penalty_heading_errors += -0.01 * (heading_errors[:2] - heading_errors2[:2])
+            #     penalty += np.mean(penalty_heading_errors)
 
             # ======== Penalty: penalise sharp turns done at high speeds =======
             if last_env_obs.ego_vehicle_state.speed > 60:
