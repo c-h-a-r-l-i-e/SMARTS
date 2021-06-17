@@ -404,4 +404,4 @@ class FrameStack(Wrapper):
             bonus += 0.05 * env_reward
             return bonus + penalty
 
-        return func
+        return old_func
