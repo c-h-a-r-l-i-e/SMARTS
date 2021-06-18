@@ -62,6 +62,10 @@ class PureController:
         if v < 1/36 and a < 0:
             a = 0
 
+        # Speed limit = 15 m/s
+        elif v > 15 and a > 0:
+            a = 0
+
         if delta == 0:
             distance = v * dt + 1/2 * a * dt ** 2
             x += distance * np.cos(theta) 
@@ -86,7 +90,7 @@ class PureController:
         theta += a * dt**2 * np.tan(delta) / (2 * l) + dt * v * np.tan(delta) / l
 
         v += a * dt
-        v = max(v, 0)
+        v = np.clip(v, 0, 15) 
 
         # Transform back to the centre of the vehicle
         x += l/2 * np.cos(theta)
