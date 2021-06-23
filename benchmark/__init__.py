@@ -62,17 +62,14 @@ def gen_config(**kwargs):
             }
         )
         tune_config.update(config["policy"][-1])
-    if kwargs["paradigm"] == "qmix":
+    elif kwargs["paradigm"] == "qmix":
         config["env_config"].update(
             {
-                "obs_space": gym.spaces.Tuple([obs_space] * agent_missions_count),
-                "act_space": gym.spaces.Tuple([act_space] * agent_missions_count),
-                "groups": {"group": agent_ids},
+                "groups": {"group": agent_ids}
             }
         )
-        tune_config.update(config["policy"][-1])
-        breakpoint()
-    if kwargs["paradigm"] == "shared":
+        #tune_config.update(config["policy"][-1])
+    elif kwargs["paradigm"] == "shared":
         policies = {"default_policy" : config["policy"][:-1] + (
                 {**config["policy"][-1]}, # , "agent_id": k
                 )
