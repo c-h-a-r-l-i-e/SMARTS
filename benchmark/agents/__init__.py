@@ -66,6 +66,7 @@ def _make_rllib_config(config, mode="training"):
     env_action_space = common.ActionSpace.from_type(action_type)
     wrapper_cls = getattr(rllib_wrappers, wrapper_config["name"])
 
+
     """ Parse policy configuration """
     policy_obs_space = wrapper_cls.get_observation_space(frame_space, wrapper_config)
     policy_action_space = wrapper_cls.get_action_space(env_action_space, wrapper_config)
@@ -121,6 +122,25 @@ def _make_rllib_config(config, mode="training"):
     config["agent"] = {"interface": AgentInterface(**interface_config)}
     config["trainer"] = _get_trainer(**config["policy"]["trainer"])
     config["policy"] = policy_config
+
+    if "base_env_name" in wrapper_config.keys():
+        base_cls = getattr(rllib_wrappers, wrapper_config["base_env_name"])
+        config["env_config"]["custom_config"]["base_env_cls"] = base_cls
+
+        base_obs_space = base_cls.get_observation_space(frame_space, wrapper_config)
+        base_action_space = base_cls.get_action_space(env_action_space, wrapper_config)
+
+        base_observation_adapter = base_cls.get_observation_adapter(
+            base_obs_space, feature_configs=features_config, wrapper_config=wrapper_config
+        )
+        base_action_adapter = base_cls.get_action_adapter(
+            action_type, base_action_space, wrapper_config
+        )
+        base_reward_adapter = base_cls.get_reward_adapter(base_observation_adapter)
+
+        config["env_config"]["custom_config"]["base_observation_adapter"] = base_observation_adapter
+        config["env_config"]["custom_config"]["base_action_adapter"] = base_action_adapter
+        config["env_config"]["custom_config"]["base_reward_adapter"] = base_reward_adapter
 
     print(format.pretty_dict(config))
 
