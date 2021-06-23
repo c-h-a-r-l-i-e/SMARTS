@@ -44,6 +44,7 @@ class Group(_GroupAgentsWrapper):
         # self._agent_keys = list(config["agent_specs"].keys())
         # self._last_observations = {k: None for k in self._agent_keys}
         self._last_observations = {}
+        self._done_agents = []
 
         base_env_cls = config["custom_config"]["base_env_cls"]
         for key in ["observation_adapter", "action_adapter", "reward_adapter"]:
@@ -102,8 +103,30 @@ class Group(_GroupAgentsWrapper):
         for k, _obs in obs.items():
             self._last_observations[k] = copy.copy(_obs)
 
+    def keep_done_agents(self, agent_ids, obs, infos, rewards, dones):
+        for k, done in dones.items():
+            if done:
+                self._done_agents.append(k)
+        for k in agent_ids:
+            if k not in dones.keys():
+                rewards[k] = 0
+                infos[k] = {'score': 0}
+                obs[k] = self._last_observations[k]
+                dones[k] = True
+
+    def filter_actions(self, action_dict):
+        new_action_dict = {}
+        for k in action_dict.keys():
+            if k not in self._done_agents:
+                new_action_dict[k] = action_dict[k]
+
+        return new_action_dict
+
+
     def step(self, action_dict):
         action_dict = self._ungroup_items(action_dict)
+        agent_ids = action_dict.keys()
+        action_dict = self.filter_actions(action_dict)
         obs, rewards, dones, infos = self.env.step(action_dict)
 
         infos = self._get_infos(obs, rewards, infos)
@@ -111,10 +134,13 @@ class Group(_GroupAgentsWrapper):
         self._update_last_observation(obs)
         obs = self._get_observations(obs)
 
+        self.keep_done_agents(agent_ids, obs, infos, rewards, dones)
+
         # Apply grouping transforms to the env outputs
         obs = self._group_items(obs)
         rewards = self._group_items(rewards, agg_fn=lambda gvals: list(gvals.values()))
-        dones = self._group_items(dones, agg_fn=lambda gvals: any(gvals.values()))
+        dones = self._group_items(dones, agg_fn=lambda gvals: all(gvals.values()))
+
         infos = self._group_items(
             infos, agg_fn=lambda gvals: {GROUP_INFO: list(gvals.values())}
         )
@@ -127,11 +153,12 @@ class Group(_GroupAgentsWrapper):
                     infos[agent_id] = {}
                 infos[agent_id][GROUP_REWARDS] = rew
 
-        dones["__all__"] = any(dones.values())
+        dones["__all__"] = all(dones.values())
         return obs, rewards, dones, infos
 
     def reset(self):
         obs = self.env.reset()
         self._update_last_observation(obs)
         obs = self._get_observations(obs)
+        self._done_agents = []
         return self._group_items(obs)
