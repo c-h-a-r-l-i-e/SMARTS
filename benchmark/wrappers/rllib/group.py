@@ -21,28 +21,67 @@
 # THE SOFTWARE.
 import copy
 
+import gym
+
 from ray.rllib.agents.dqn import DQNTrainer
 from ray.rllib.env.constants import GROUP_INFO, GROUP_REWARDS
 from ray.rllib.env.group_agents_wrapper import _GroupAgentsWrapper
+from benchmark.wrappers.rllib import FrameStack
 
 
 class Group(_GroupAgentsWrapper):
     def __init__(self, config):
-        obs_space = config["obs_space"]
-        act_space = config["act_space"]
         groups = config["groups"]
 
-        base_env_cls = config["base_env_cls"]
+        env_config = config["custom_config"]
+        obs_space = env_config["observation_space"]
+        act_space = env_config["action_space"]
+
+        self.observation_adapter = env_config.get("observation_adapter")
+        self.info_adapter = env_config.get("info_adapter")
+        self.reward_adapter = env_config.get("reward_adapter")
+
+        # self._agent_keys = list(config["agent_specs"].keys())
+        # self._last_observations = {k: None for k in self._agent_keys}
+        self._last_observations = {}
+
+        base_env_cls = config["custom_config"]["base_env_cls"]
+        for key in ["observation_adapter", "action_adapter", "reward_adapter"]:
+            config["custom_config"][key] = config["custom_config"][f"base_{key}"]
+
         env = base_env_cls(config)
 
-        self.observation_adapter = config.get("observation_adapter")
-        self.info_adapter = config.get("info_adapter")
-        self.reward_adapter = config.get("reward_adapter")
-
-        self._agent_keys = list(config["agent_specs"].keys())
-        self._last_observations = {k: None for k in self._agent_keys}
-
         super(Group, self).__init__(env, groups, obs_space, act_space)
+
+    @staticmethod
+    def get_reward_adapter(observation_adapter):
+        return FrameStack.get_reward_adapter(observation_adapter)
+
+    @staticmethod
+    def get_observation_space(observation_space, wrapper_config):
+        obs_space = FrameStack.get_observation_space(observation_space, wrapper_config)
+        return gym.spaces.Tuple([obs_space] * wrapper_config["agent_count"])
+
+    @staticmethod
+    def get_action_space(action_space, wrapper_config=None):
+        act_space = FrameStack.get_action_space(action_space, wrapper_config)
+        return gym.spaces.Tuple([act_space] * wrapper_config["agent_count"])
+
+    @staticmethod
+    def get_observation_adapter(
+        observation_space, feature_configs, wrapper_config=None
+    ):
+        def func(env_obs):
+            return env_obs
+        return func
+
+    @staticmethod
+    def get_action_adapter(action_type, action_space, wrapper_config=None):
+        return FrameStack.get_action_adapter(action_type, action_space, wrapper_config)
+
+    @staticmethod
+    def get_preprocessor():
+        return FrameStack.get_preprocessor()
 
     def _get_infos(self, obs, rewards, infos):
         return infos
@@ -50,7 +89,7 @@ class Group(_GroupAgentsWrapper):
     def _get_rewards(self, last_obs, obs, rewards):
         res = {}
         for key in obs:
-            res[key] = self.reward_adapter(last_obs[key], obs[key], rewards[key])
+            res[key] = rewards[key]
         return res
 
     def _get_observations(self, obs):

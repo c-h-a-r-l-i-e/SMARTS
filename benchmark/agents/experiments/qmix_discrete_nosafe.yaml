@@ -1,0 +1,49 @@
+name: qmix_discrete_nosafe
+
+agent:
+  state:
+    wrapper:
+      name: Group
+      base_env_name: FrameStack
+      num_stack: 3
+      agent_count: 4
+    features:
+      goal_relative_pos: True
+      distance_to_center: True
+      speed: True
+      steering: True
+      heading_errors: [20, continuous]
+      neighbor: 8
+  action:
+    type: 10   # 9 for pure continuous (no pybullet), 10 for pure lane, 11/ 12 for safe pure/ safe lane
+
+interface:
+  max_episode_steps: 1000
+  neighborhood_vehicles:
+    radius: 50
+  waypoints:
+    lookahead: 50   # larger than size of heading errors
+
+policy:
+  framework: rllib
+  trainer:
+    path: ray.rllib.agents.qmix
+    name: QMixTrainer
+
+run:
+  checkpoint_freq: 40
+  checkpoint_at_end: True
+  max_failures: 1000
+  resume: False
+  export_formats: [model, checkpoint]
+  stop:
+    training_iteration: 100
+  config:
+    log_level: ERROR
+    num_workers: 1
+    num_gpus: 0
+    horizon: 1000
+    # learning
+    learning_starts: 1024
+    # buffer_size: 1024
+    train_batch_size: 1024
