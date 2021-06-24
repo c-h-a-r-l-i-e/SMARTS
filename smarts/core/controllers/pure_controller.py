@@ -63,7 +63,7 @@ class PureController:
             a = 0
 
         # Speed limit = 15 m/s
-        elif v > 15 and a > 0:
+        elif v >= 15 and a > 0:
             a = 0
 
         if delta == 0:
