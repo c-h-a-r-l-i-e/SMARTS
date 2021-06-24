@@ -38,6 +38,7 @@ def parse_args():
         type=str,
         help="Scenario name",
     )
+    parser.add_argument("--checkpoint", type=str, required=True)
     parser.add_argument("--num_steps", type=int, default=1000)
     parser.add_argument("--num_runs", type=int, default=10)
     # TODO(ming): eliminate this arg
@@ -59,6 +60,7 @@ def parse_args():
 def main(
     scenario,
     config_files,
+    checkpoint,
     log_dir,
     num_steps=1000,
     num_episodes=10,
@@ -67,19 +69,23 @@ def main(
     show_plots=False,
 ):
 
-    ray.init()
+    ray.init(log_to_driver=False)
     metrics_handler = basic_handler.BasicMetricHandler()
 
     for config_file in config_files:
         config = gen_config(
             scenario=scenario,
             config_file=config_file,
+            checkpoint=checkpoint,
+            envision_record_data_replay_path=None,
+            use_sumo=False,
             num_steps=num_steps,
             num_episodes=num_episodes,
             paradigm=paradigm,
             headless=headless,
             mode="evaluation",
         )
+
 
         tune_config = config["run"]["config"]
         trainer_cls = config["trainer"]
@@ -88,15 +94,28 @@ def main(
             trainer_config.update({"multiagent": tune_config["multiagent"]})
         else:
             trainer_config.update({"model": tune_config["model"]})
+        trainer_config["create_env_on_driver"] = True
+        
 
         trainer = trainer_cls(env=tune_config["env"], config=trainer_config)
 
-        trainer.restore(config["checkpoint"])
+        trainer.restore(checkpoint)
         metrics_handler.set_log(
             algorithm=config_file.split("/")[-2], num_episodes=num_episodes
         )
-        rollout(trainer, None, metrics_handler, num_steps, num_episodes, log_dir)
+        csv_dir = rollout(trainer, None, metrics_handler, num_steps, num_episodes, log_dir)
         trainer.stop()
+        agent_mets = metrics_handler.compute(csv_dir)
+        ray.shutdown()
+
+        return agent_mets
+
+
+
+
+
+
+
 
     if show_plots:
         metrics_handler.show_plots()
@@ -107,6 +126,7 @@ if __name__ == "__main__":
     main(
         scenario=args.scenario,
         config_files=args.config_files,
+        checkpoint=args.checkpoint,
         num_steps=args.num_steps,
         num_episodes=args.num_runs,
         paradigm=args.paradigm,

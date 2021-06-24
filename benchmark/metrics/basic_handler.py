@@ -104,6 +104,7 @@ class BasicMetricHandler(MetricHandler):
 
     def write_to_csv(self, csv_dir):
         csv_dir = f"{csv_dir}/{int(time.time())}"
+        print("Writing  behaviour to {}".format(csv_dir))
         for i, logger in enumerate(self._logs):
             sub_dir = f"{csv_dir}/episode_{i}"
             os.makedirs(sub_dir)
@@ -125,6 +126,7 @@ class BasicMetricHandler(MetricHandler):
                     writer.writerow(
                         ["Num_Collision"] + [logger.num_collision[agent_id]]
                     )
+        return csv_dir
 
     def read_logs(self, csv_dir):
         agent_record = defaultdict(
@@ -170,16 +172,16 @@ class BasicMetricHandler(MetricHandler):
         goal_dist_th = 2.0
 
         for sub_dir in sub_dirs:
-            episode_agent_record: dict = self.read_episode(sub_dir)
+            episode_agent_record: dict = self.read_logs(sub_dir)
             for aid, record in episode_agent_record.items():
                 am = agent_metrics[aid]
-                am[MetricKeys.AVE_CR] += record["Num_Collision"]
-                min_goal_dist = record["GDistance"][-1]
+                am[MetricKeys.AVE_CR] += float(record["Num_Collision"][-1])
+                min_goal_dist = float(record["GDistance"][-1])
                 am[MetricKeys.AVE_COMR] += 1.0 if min_goal_dist < goal_dist_th else 0.0
-                am[MetricKeys.MAX_L] = max(am[MetricKeys.MAX_L], len(record["Speed"]))
-                am[MetricKeys.MIN_L] = min(am[MetricKeys.MIN_L], len(record["Speed"]))
-                am[MetricKeys.MEAN_L] += len(record["Speed"])
-                am[MetricKeys.MIN_G] = min(am[MetricKeys.MIN_G], min_goal_dist)
+                #am[MetricKeys.MAX_L] = max(am[MetricKeys.MAX_L], len(record["Speed"]))
+                #am[MetricKeys.MIN_L] = min(am[MetricKeys.MIN_L], len(record["Speed"]))
+                #am[MetricKeys.MEAN_L] += len(record["Speed"])
+                #am[MetricKeys.MIN_G] = min(am[MetricKeys.MIN_G], min_goal_dist)
 
         for aid, record in agent_metrics.items():
             record[MetricKeys.MEAN_L] /= len(sub_dirs)
@@ -187,3 +189,4 @@ class BasicMetricHandler(MetricHandler):
             record[MetricKeys.AVE_CR] /= len(sub_dirs)
 
         print(format.pretty_dict(agent_metrics))
+        return agent_metrics

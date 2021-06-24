@@ -128,4 +128,6 @@ def rollout(trainer, env_name, metrics_handler, num_steps, num_episodes, log_dir
         )
         if done:
             episode += 1
-    metrics_handler.write_to_csv(csv_dir=log_dir)
+    csv_dir = metrics_handler.write_to_csv(csv_dir=log_dir)
+    return csv_dir
+
