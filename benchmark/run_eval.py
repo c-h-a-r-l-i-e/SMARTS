@@ -8,8 +8,8 @@ import pickle
 
 results = {}
 for algo in ["ppo"]:
-    for action in ["discrete", "continuous"]:
-        for safety in ["safe", "nosafe"]:
+    for action in ["continuous"]:
+        for safety in ["safe"]:
             print(f"{algo} - {action} - {safety}")
             complete_rates = []
             collision_rates = []
@@ -24,12 +24,14 @@ for algo in ["ppo"]:
                 complete_rate = agent_mets['']['Completion Rate']
                 collision_rate = agent_mets['']['Average Collision Rate']
 
+                print("complete rate: {}".format(complete_rate))
+                print("collision rate: {}".format(collision_rate))
+
                 complete_rates.append(complete_rate)
                 collision_rates.append(collision_rate)
 
             comp_mean = np.mean(complete_rates)
             comp_std = np.std(complete_rates)
-
 
             coll_mean = np.mean(collision_rates)
             coll_std = np.std(collision_rates)
